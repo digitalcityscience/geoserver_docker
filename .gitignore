@@ -1,0 +1,21 @@
+# Ignore environment files
+.env*
+
+# Ignore local data and plugins (created by Makefile)
+geoserver_data/
+plugins/
+
+# Ignore logs
+*.log
+
+# Ignore Python cache
+__pycache__/
+
+# Ignore OS and editor files
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Ignore backup files
+*~
