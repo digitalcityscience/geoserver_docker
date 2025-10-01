@@ -1,0 +1,32 @@
+services:
+  geoserver:
+    build:
+      context: .          # <-- repo kökü
+      dockerfile: Dockerfile
+      args:
+        GEOSERVER_VERSION: ${GEOSERVER_VERSION}
+    image: dcs-geoserver:${GEOSERVER_VERSION}
+    ports:
+      - "8080:8080"
+    volumes:
+      - geoserver_data:/geoserver_data/data
+    depends_on:
+      - postgis
+  postgis:
+    image: docker.io/mobilitydb/mobilitydb:latest
+    container_name: mobilitydb
+    env_file:
+      - .env.dev
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "5438:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgis_data:     
+  geoserver_data:   
