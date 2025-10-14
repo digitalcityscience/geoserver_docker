@@ -8,6 +8,8 @@ ARG GEOSERVER_VERSION=2.27.2
 ARG JAVA_OPTS="-Xms512m -Xmx1024m"
 
 # Runtime ENV
+ENV GEOSERVER_ADMIN_USER=admin
+ENV GEOSERVER_ADMIN_PASSWORD=geoserver
 ENV GEOSERVER_DATA_DIR="/geoserver_data/data"
 ENV GEOSERVER_CORS_ENABLED=true
 ENV GEOSERVER_CORS_ALLOWED_ORIGINS=*
@@ -23,9 +25,8 @@ RUN pip install invoke requests
 RUN cd /usr/local/tomcat/webapps && \
     wget https://sourceforge.net/projects/geoserver/files/GeoServer/${GEOSERVER_VERSION}/geoserver-${GEOSERVER_VERSION}-war.zip -O geoserver.zip && \
     unzip geoserver.zip && unzip geoserver.war -d geoserver && \
-    rm geoserver.zip geoserver.war && \
-    mkdir -p $GEOSERVER_DATA_DIR
-
+    rm geoserver.zip geoserver.war 
+    # mkdir -p $GEOSERVER_DATA_DIR
 # Add plugins (after download_plugins.sh runs)
 COPY ./plugins /usr/local/tomcat/webapps/geoserver/WEB-INF/lib
 
@@ -34,8 +35,5 @@ COPY entrypoint.sh /usr/local/tomcat/tmp/entrypoint.sh
 COPY set_geoserver_password.py /usr/local/tomcat/tmp/
 RUN chmod +x /usr/local/tomcat/tmp/entrypoint.sh
 
-VOLUME $GEOSERVER_DATA_DIR
-
 ENV JAVA_OPTS=${JAVA_OPTS}
-
 CMD ["/usr/local/tomcat/tmp/entrypoint.sh"]

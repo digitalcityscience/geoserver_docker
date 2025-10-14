@@ -60,12 +60,14 @@ plugins: setup
 build: setup plugins
 	@echo "🐳 Building image: $(IMAGE_NAME):$(IMAGE_TAG)"
 	docker build \
-		--build-arg GEOSERVER_VERSION=$(GEOSERVER_VERSION) \
-		-t $(IMAGE_NAME):$(IMAGE_TAG) \
-		.
+        --no-cache \
+        --build-arg GEOSERVER_VERSION=$(GEOSERVER_VERSION) \
+        -t $(IMAGE_NAME):$(IMAGE_TAG) \
+        .
 
 up: which-env
 	@echo "🚀 docker compose up with $(ENV_FILE)"
+	@echo "Using $(ENV_FILE)"
 	docker compose --env-file $(ENV_FILE) up -d --build
 
 down:

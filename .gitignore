@@ -4,7 +4,7 @@
 # Ignore local data and plugins (created by Makefile)
 geoserver_data/
 plugins/
-
+_backup/
 # Ignore logs
 *.log
 

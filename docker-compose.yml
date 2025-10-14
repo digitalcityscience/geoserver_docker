@@ -1,26 +1,33 @@
 services:
   geoserver:
     build:
-      context: .          # <-- repo kökü
+      context: .
       dockerfile: Dockerfile
       args:
         GEOSERVER_VERSION: ${GEOSERVER_VERSION}
     image: dcs-geoserver:${GEOSERVER_VERSION}
     ports:
       - "8080:8080"
+    env_file:
+      - ${ENV_FILE:-.env.dev} # <-- Makefile'dan gelen ENV_FILE kullanılır
+    # environment:
+    #   # Bu değerler env_file'dan otomatik yüklenecek
+    #   - GEOSERVER_ADMIN_USER=${GEOSERVER_ADMIN_USER}
+    #   - GEOSERVER_ADMIN_PASSWORD=geoserver2
     volumes:
-      - geoserver_data:/geoserver_data/data
+      - geoserver_data2:/geoserver_data/data
     depends_on:
       - postgis
+
   postgis:
     image: docker.io/mobilitydb/mobilitydb:latest
     container_name: mobilitydb
     env_file:
-      - .env.dev
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - ${ENV_FILE:-.env.dev} # <-- Aynı şekilde
+    # environment:
+    #   - POSTGRES_DB=${POSTGRES_DB}
+    #   - POSTGRES_USER=${POSTGRES_USER}
+    #   - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     ports:
       - "5438:5432"
     volumes:
@@ -28,5 +35,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  postgis_data:     
-  geoserver_data:   
+  postgis_data:
+  geoserver_data2:
