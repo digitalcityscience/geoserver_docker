@@ -5,6 +5,7 @@
 geoserver_data/
 plugins/
 _backup/
+internal_notes/
 # Ignore logs
 *.log
 
