@@ -32,7 +32,6 @@ COPY ./plugins /usr/local/tomcat/webapps/geoserver/WEB-INF/lib
 
 # Add scripts
 COPY entrypoint.sh /usr/local/tomcat/tmp/entrypoint.sh
-COPY set_geoserver_password.py /usr/local/tomcat/tmp/
 RUN chmod +x /usr/local/tomcat/tmp/entrypoint.sh
 
 ENV JAVA_OPTS=${JAVA_OPTS}
