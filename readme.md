@@ -40,17 +40,25 @@ make up ENV=prod
 📂 Repository Structure
 
 geoserver-docker/
+
 ├── docker-compose.yml          # Local stack (GeoServer + MobilityDB)
+
 ├── Dockerfile                  # Custom GeoServer image build
+
 ├── Makefile                    # Automation for setup/build/run/clean
+
 ├── download_plugins.sh          # Script to fetch plugins
+
 ├── entrypoint.sh                # Custom entrypoint (GeoServer bootstrap)
+
 ├── set_geoserver_password.py    # Utility to reset admin password
+
 ├── readme.md                    # This file
 
 Generated/ignored at runtime:
 
 ├── geoserver_data/             # GeoServer data directory (ignored)
+
 ├── plugins/                    # Downloaded plugin JARs (ignored)
 
 
@@ -65,13 +73,21 @@ The system uses separate env files:
 ⸻
 
 ▶️ Makefile Tasks
+
 	•	make setup – create geoserver_data/ and plugins/ if missing
+	
 	•	make plugins – download GeoServer plugins (from PLUGINS list)
+	
 	•	make build – build the Docker image with plugins
+	
 	•	make up ENV=dev – run stack with .env.dev
+	
 	•	make up ENV=prod – run stack with .env.prod
+	
 	•	make down – stop containers
+	
 	•	make clean – stop & remove containers, volumes, and image
+	
 	•	make rebuild ENV=prod – full rebuild cycle
 
 ⸻
@@ -102,30 +118,20 @@ geoserver-<VERSION>-<PLUGIN>-plugin.zip → <PLUGIN>
 
 Examples (GeoServer 2.27.2)
 
-ZIP filename	Plugin name to use
-geoserver-2.27.2-mbstyle-plugin.zip	mbstyle
-geoserver-2.27.2-vectortiles-plugin.zip	vectortiles
-geoserver-2.27.2-csw-iso-plugin.zip	csw-iso
-geoserver-2.27.2-netcdf-plugin.zip	netcdf
-geoserver-2.27.2-netcdf-out-plugin.zip	netcdf-out
-geoserver-2.27.2-ogcapi-features-plugin.zip	ogcapi-features
-geoserver-2.27.2-importer-plugin.zip	importer
-geoserver-2.27.2-sldservice-plugin.zip	sldservice
-geoserver-2.27.2-ysld-plugin.zip	ysld
+ZIP filename	 Plugin name to use
 
+- geoserver-2.27.2-mbstyle-plugin.zip	> mbstyle
 
+- geoserver-2.27.2-vectortiles-plugin.zip	> vectortiles
+
+- geoserver-2.27.2-csw-iso-plugin.zip	> csw-iso
 ⸻
 
 Example Usage
 
-Plugins (override via: make PLUGINS="mbstyle vectortiles")
-PLUGINS ?= mbstyle vectortiles wfsoutput
+Download VectorTiles + MBStyle for GeoServer 2.27.2 >>  ./download_plugins.sh "2.27.2" "vectortiles mbstyle"
 
-Download VectorTiles + MBStyle for GeoServer 2.27.2
-./download_plugins.sh "2.27.2" "vectortiles mbstyle"
-
-Download NetCDF and OGC API Features
-./download_plugins.sh "2.27.2" "netcdf ogcapi-features"
+Download NetCDF and OGC API Features  >> ./download_plugins.sh "2.27.2" "netcdf ogcapi-features"
 
 ---
 
@@ -144,8 +150,11 @@ COM_PLUGINS = \
   https://build.geoserver.org/geoserver/2.27.x/community-latest/geoserver-2.27-SNAPSHOT-sec-oauth2-openid-connect-plugin.zip
 
 Notes:
+
 	•	Multiple URLs must be space-separated (not commas).
+	
 	•	Community plugins are less stable than official ones and may change between versions.
+	
 	•	These will be automatically downloaded and extracted into the plugins/ folder during make build.
 
 ✅ Example with multiple community plugins:
