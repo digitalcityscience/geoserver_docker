@@ -100,8 +100,6 @@ To customize plugins:
 
 ✅ Tip: Ensure plugins/ is not in .dockerignore, otherwise they won’t be included in the image.
 
-Got it 👍 Here’s the cleaned up English version you can drop straight into your README:
-
 ⸻
 
 📌 Plugin Naming Guide
