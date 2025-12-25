@@ -1,0 +1,15 @@
+<jdbcroleservice>
+  <id>-6e132dc:19b4b89a08e:-7fff</id>
+  <name>jdbc_role</name>
+  <className>org.geoserver.security.jdbc.JDBCRoleService</className>
+  <propertyFileNameDDL>rolesddl.xml</propertyFileNameDDL>
+  <propertyFileNameDML>rolesdml.xml</propertyFileNameDML>
+  <jndi>false</jndi>
+  <driverClassName>org.postgresql.Driver</driverClassName>
+  <connectURL>jdbc:postgresql://db:5432/tosca?currentSchema=gs_auth_role_schema</connectURL>
+  <userName>tosca_gs</userName>
+  <password>postgres_gs</password>
+  <creatingTables>true</creatingTables>
+  <adminRoleName>ADMIN</adminRoleName>
+  <groupAdminRoleName>GROUP_ADMIN</groupAdminRoleName>
+</jdbcroleservice>

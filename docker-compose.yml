@@ -1,32 +1,59 @@
 services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: tosca-db
+    env_file:
+      - .env.dev
+
+    environment:
+      POSTGRES_DB: ${PG_DATABASE}
+      POSTGRES_USER: ${PG_SUPERUSER}
+      POSTGRES_PASSWORD: ${PG_SUPERPASS}
+
+      # initdb script'lerin kullanıyorsa bunları da geçiyoruz:
+      PG_API_USER: ${PG_API_USER}
+      PG_API_PASSWORD: ${PG_API_PASSWORD}
+      PG_GS_USER: ${PG_GS_USER}
+      PG_GS_PASSWORD: ${PG_GS_PASSWORD}
+      PG_SCHEMA_API: ${PG_SCHEMA_API}
+      PG_SCHEMA_GEOSERVER: ${PG_SCHEMA_GEOSERVER}
+      PG_SCHEMA_GIS: ${PG_SCHEMA_GIS}
+    ports:
+      - "${PG_PORT}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${PG_SUPERUSER} -d ${PG_DATABASE} -h 127.0.0.1 -p 5432",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
   geoserver:
     build:
-      context: .          # <-- repo kökü
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: docker/Dockerfile
       args:
         GEOSERVER_VERSION: ${GEOSERVER_VERSION}
     image: dcs-geoserver:${GEOSERVER_VERSION}
-    ports:
-      - "8080:8080"
-    volumes:
-      - geoserver_data:/geoserver_data/data
-    depends_on:
-      - postgis
-  postgis:
-    image: docker.io/mobilitydb/mobilitydb:latest
-    container_name: mobilitydb
+    container_name: tosca-geoserver
     env_file:
       - .env.dev
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     ports:
-      - "5438:5432"
+      - "${GEOSERVER_PORT}:8080"
     volumes:
-      - postgis_data:/var/lib/postgresql/data
+      - geoserver_data:/geoserver_data/data
+      # - ./docker/geoserver-init:/geoserver-init:ro
+      - /Users/hsadmin:/mnt/home
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
-
 volumes:
-  postgis_data:     
-  geoserver_data:   
+  pg_data:
+  geoserver_data:

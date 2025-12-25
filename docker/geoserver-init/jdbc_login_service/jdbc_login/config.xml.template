@@ -1,0 +1,15 @@
+<jdbcusergroupservice>
+  <id>-6e132dc:19b4b89a08e:-8000</id>
+  <name>${JDBC_LOGIN_SERVICE_NAME}</name>
+  <className>org.geoserver.security.jdbc.JDBCUserGroupService</className>
+  <propertyFileNameDDL>usersddl.xml</propertyFileNameDDL>
+  <propertyFileNameDML>usersdml.xml</propertyFileNameDML>
+  <jndi>false</jndi>
+  <driverClassName>org.postgresql.Driver</driverClassName>
+  <connectURL>jdbc:postgresql://${PG_HOST}:${PG_DOCKER_PORT}/${PG_DATABASE}?currentSchema=${PG_SCHEMA_GEOSERVER}</connectURL>
+  <userName>${PG_GS_USER}</userName>
+  <password>${PG_GS_PASSWORD}</password>
+  <creatingTables>true</creatingTables>
+  <passwordEncoderName>strongPbePasswordEncoder</passwordEncoderName>
+  <passwordPolicyName>default</passwordPolicyName>
+</jdbcusergroupservice>

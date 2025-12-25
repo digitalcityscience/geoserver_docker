@@ -1,0 +1,6 @@
+<usernamePassword>
+  <id>-1777827f:19b4c78acad:-7ffc</id>
+  <name>${JDBC_AUTH_SERVICE_NAME}</name>
+  <className>org.geoserver.security.auth.UsernamePasswordAuthenticationProvider</className>
+  <userGroupServiceName>${JDBC_LOGIN_SERVICE_NAME}</userGroupServiceName>
+</usernamePassword>
