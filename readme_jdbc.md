@@ -199,7 +199,6 @@ You can access:
 ⚠️ Editing these tables manually is possible but not recommended unless you fully understand GeoServer’s internal model.
 
 ⸻
-
 One-line summary
 
 We moved security and configuration out of files
