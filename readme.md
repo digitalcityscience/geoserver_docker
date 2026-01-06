@@ -1,7 +1,3 @@
-Tabii! Aşağıda orijinal yapını ve tonunu büyük ölçüde koruyarak, küçük düzenlemelerle (akıcılık, tutarlılık ve netlik açısından) yeniden yazılmış **tam README** metnini bulacaksın:
-
----
-
 # 🚀 GeoServer Docker Automation
 
 A ready-to-use Docker setup for GeoServer.
