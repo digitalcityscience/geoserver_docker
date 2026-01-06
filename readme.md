@@ -8,7 +8,6 @@ Build custom GeoServer images with selected plugins, run them with PostgreSQL / 
 
 ### 🧑‍💻 Local Development
 
-```bash
 cp env_dev_sample .env.dev
 make up ENV=dev
 
@@ -196,4 +195,4 @@ This repository supports:
 	•	Serious JDBC-backed production setups
 
 —but the JDBC path requires reading readme_jdbc.md.
-```
+
