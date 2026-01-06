@@ -43,14 +43,6 @@ up: which-env
 	fi
 	@echo "🚀 docker compose up ($(ENV))"
 	docker compose --env-file $(ENV_FILE) up -d \
-# -------------------------------------------------
-# Admin password init (EXPLICIT, SAFE)
-# -------------------------------------------------
-password:
-	@echo "⏳ Waiting for GeoServer..."
-	sleep 20
-	@echo "🔐 Applying GeoServer admin password via REST"
-	docker compose exec -T geoserver /scripts/init_admin_password.sh
 
 # -------------------------------------------------
 # Down

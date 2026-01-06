@@ -59,7 +59,7 @@ RUN chmod +x /scripts/*.sh
 # Volumes
 # -----------------------------
 VOLUME ${GEOSERVER_DATA_DIR}
-RUN python3 /opt/geoserver/plugin_manager/main.py \
+RUN python3 /opt/geoserver/plugin_manager/cli.py \
   --version ${GEOSERVER_VERSION} \
   --community "${COMMUNITY_PLUGINS}" \
   --official "${OFFICIAL_PLUGINS}"

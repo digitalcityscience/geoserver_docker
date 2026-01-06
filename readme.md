@@ -1,18 +1,15 @@
-🚀 GeoServer Docker Automation
+# 🚀 GeoServer Docker Automation
 
 A ready-to-use Docker setup for GeoServer.
-Build custom GeoServer images with selected plugins, run them with PostgreSQL/MobilityDB, and switch easily between development (localhost) and production (domain) setups.
 
-⸻
+Build custom GeoServer images with selected plugins, run them with PostgreSQL / MobilityDB, and switch easily between development (localhost) and production (domain) setups.
 
-⚡ Quick Start
+---
 
-Just pick your environment when starting:
+### 🧑‍💻 Local Development
 
-🧑‍💻 Local Development
-
-copy env_dev_sample as .env.dev
-
+```bash
+cp env_dev_sample .env.dev
 make up ENV=dev
 
 👉 Opens at http://localhost:8080/geoserver
@@ -21,11 +18,74 @@ make up ENV=dev
 
 🌐 Server / Production (with domain + reverse proxy)
 
-copy env_prod_sample as .env.prod
-
+cp env_prod_sample .env.prod
 make up ENV=prod
 
-👉 Check the all details of env files for production.
+👉 Review all values inside .env.prod carefully before running in production.
+
+⸻
+
+⚙️ Environment Configuration (Important)
+
+This project is fully driven by environment files.
+	•	.env.dev → local development (localhost)
+	•	.env.prod → production / server (domain, HTTPS, reverse proxy)
+
+⚠️ Almost all scripts, Makefile targets, and Docker behavior depend on these env files.
+If an env file is missing, misnamed, or not loaded, things will fail — often silently.
+
+⸻
+
+🗄 JDBC / PostgreSQL Setup (Advanced)
+
+When do you need this?
+
+If you want to:
+	•	Store GeoServer users & roles in PostgreSQL
+	•	Store GeoServer configuration (workspaces, layers, styles, stores) in PostgreSQL
+	•	Run GeoServer reliably in production (AWS / on-prem / CI/CD)
+
+👉 You must run GeoServer together with PostgreSQL
+
+👉 You must read [JDBC documentation](./readme_jdbc.md)
+
+This setup is not optional for JDBC-based security or JDBCConfig.
+
+What this project supports
+	•	JDBC User / Role security (PostgreSQL-backed)
+	•	JDBCConfig / JDBCStore (GeoServer configuration in DB)
+	•	Separate schemas for:
+	•	Security (users, roles)
+	•	GeoServer configuration (workspaces, layers, styles)
+
+📖 All details, caveats, and required UI steps are documented in:
+
+readme_jdbc.md
+
+If you skip that document, things will look broken — even if they are not.
+
+⸻
+
+📂 Script Location Matters (Very Important)
+
+Some scripts must be executed from the project root, next to the env files.
+
+Example:
+
+scripts/activate_jdbcS_settings.sh
+
+This script expects:
+	•	.env.dev or .env.prod to be in the same directory level
+	•	Environment variables to be auto-loaded
+
+❌ Running it from another folder
+❌ Copying it elsewhere
+❌ Renaming env files
+
+→ will cause failures.
+
+Rule of thumb:
+If the script cannot see the env file, it cannot work.
 
 ⸻
 
@@ -33,131 +93,107 @@ make up ENV=prod
 	•	Automatic Plugin Installation – define plugins once, they’re fetched & installed
 	•	Custom Version Support – any GeoServer version via .env
 	•	Dev-Ready Stack – includes MobilityDB for PostGIS mobility data testing
-	•	Automated Workflow – Makefile simplifies build/run/clean
-
-⸻
-
-📂 Repository Structure
-
-geoserver-docker/
-
-├── docker-compose.yml          # Local stack (GeoServer + MobilityDB)
-
-├── Dockerfile                  # Custom GeoServer image build
-
-├── Makefile                    # Automation for setup/build/run/clean
-
-├── download_plugins.sh          # Script to fetch plugins
-
-├── entrypoint.sh                # Custom entrypoint (GeoServer bootstrap)
-
-├── set_geoserver_password.py    # Utility to reset admin password
-
-├── readme.md                    # This file
-
-Generated/ignored at runtime:
-
-├── geoserver_data/             # GeoServer data directory (ignored)
-
-├── plugins/                    # Downloaded plugin JARs (ignored)
-
-
-⸻
-
-⚙️ Environment Configuration
-
-The system uses separate env files:
-	•	.env.dev → localhost development
-	•	.env.prod → server/prod with domain + HTTPS
+	•	Automated Workflow – Makefile simplifies build / run / clean
+	•	JDBC-ready architecture for production deployments
 
 ⸻
 
 ▶️ Makefile Tasks
-
-	•	make setup – create geoserver_data/ and plugins/ if missing
-	
-	•	make plugins – download GeoServer plugins (from PLUGINS list)
-	
-	•	make build – build the Docker image with plugins
-	
-	•	make up ENV=dev – run stack with .env.dev
-	
-	•	make up ENV=prod – run stack with .env.prod
-	
-	•	make down – stop containers
-	
-	•	make clean – stop & remove containers, volumes, and image
-	
-	•	make rebuild ENV=prod – full rebuild cycle
-
-⸻
-
-📦 Plugin Setup
-
-To customize plugins:
-	•	Edit the PLUGINS list at the top of the Makefile, or
-	•	Run manually:
-
-✅ Tip: Ensure plugins/ is not in .dockerignore, otherwise they won’t be included in the image.
+	•	make which-env ENV=dev
+→ Shows the active environment and the loaded .env file
+	•	make build ENV=dev
+→ Builds Docker images without cache
+	•	make up ENV=dev
+→ Starts the stack using .env.dev
+	•	make up ENV=prod
+→ Starts the stack using .env.prod
+→ Runs production safety checks automatically
+	•	make down ENV=dev
+→ Stops all containers
+	•	make restart ENV=dev
+→ Restarts the stack (down + up)
+	•	make logs
+→ Shows logs from all containers
+	•	make logs geoserver
+→ Shows logs only from the GeoServer container
+	•	make rebuild ENV=prod
+→ Rebuilds images without cache and restarts the stack
+	•	make rmVolumes ENV=dev
+→ ⚠️ Removes all volumes (DATA LOSS)
 
 ⸻
+### 📦 GeoServer Plugins (Official & Community)
 
-📌 Plugin Naming Guide
+GeoServer plugins are configured **only via environment files**.
+There is **no manual download**, **no URL handling**, and **no Makefile editing** required.
 
-When adding plugins to the PLUGINS list (or running download_plugins.sh),
-use the plugin name exactly as it appears in the ZIP filename on the GeoServer SourceForge extensions page.
+You only need to edit **one place**:
 
-Rule:
-
-geoserver-<VERSION>-<PLUGIN>-plugin.zip → <PLUGIN>
-
-
-⸻
-
-Examples (GeoServer 2.27.2)
-
-ZIP filename	 Plugin name to use
-
-- geoserver-2.27.2-mbstyle-plugin.zip	> mbstyle
-
-- geoserver-2.27.2-vectortiles-plugin.zip	> vectortiles
-
-- geoserver-2.27.2-csw-iso-plugin.zip	> csw-iso
-⸻
-
-Example Usage
-
-Download VectorTiles + MBStyle for GeoServer 2.27.2 >>  ./download_plugins.sh "2.27.2" "vectortiles mbstyle"
-
-Download NetCDF and OGC API Features  >> ./download_plugins.sh "2.27.2" "netcdf ogcapi-features"
+- `.env.dev` for local development
+- `.env.prod` for production
 
 ---
 
-🌍 Community Modules (Optional)
+#### Official Plugins
 
-In addition to official GeoServer plugins (downloaded via the PLUGINS list), you can also include community modules by specifying their full URLs.
-These are usually published under the GeoServer build server.
+Official GeoServer plugins are listed as **comma-separated names**:
 
-📌 Example: OAuth2 / OpenID Connect plugin (community)
+OFFICIAL_PLUGINS=gdal,monitor,vectortiles,mbstyle
 
+Rules:
+- Use the **plugin identifier**, not the full ZIP name
+- Plugin names must match the official GeoServer plugin naming
+- Docker automatically downloads and installs the correct version
+- Plugin version always matches `GEOSERVER_VERSION`
 
- 
-Community plugins (full URLs, space separated, NOT commas!)
+---
 
-COM_PLUGINS = \
-  https://build.geoserver.org/geoserver/2.27.x/community-latest/geoserver-2.27-SNAPSHOT-sec-oauth2-openid-connect-plugin.zip
+#### Community Plugins
+
+Community plugins are also listed as **comma-separated names**:
+
+COMMUNITY_PLUGINS=jdbcconfig,jdbcstore,sec-oauth2-openid-connect
 
 Notes:
+- These are **GeoServer community modules**
+- Versions are resolved automatically
+- No URLs are required
+- Community plugins may be less stable than official ones
 
-	•	Multiple URLs must be space-separated (not commas).
-	
-	•	Community plugins are less stable than official ones and may change between versions.
-	
-	•	These will be automatically downloaded and extracted into the plugins/ folder during make build.
+---
 
-✅ Example with multiple community plugins:
+#### Applying Plugin Changes
 
-make COM_PLUGINS="https://url/plugin1.zip https://url/plugin2.zip"
+After changing plugin lists in `.env.dev` or `.env.prod`, you **must rebuild** the image:
+
+make rebuild ENV=dev
+make rebuild ENV=prod
+
+Docker will handle:
+- Resolving plugin versions
+- Downloading plugin archives
+- Installing them into the GeoServer image
+
+---
+
+#### Important Notes
+
+- Plugin configuration is **environment-specific**
+- Development and production may use **different plugin sets**
+- Manual plugin downloads are **not supported**
+- If a plugin fails to load, check GeoServer logs first
+
+Edit the env file — Docker does the rest.
+
 
 
 ⸻
+
+Final Note
+
+This repository supports:
+	•	Simple local testing
+	•	Serious JDBC-backed production setups
+
+—but the JDBC path requires reading readme_jdbc.md.
+```

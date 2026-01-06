@@ -2,6 +2,7 @@
 # GLOBAL
 ############################
 COMPOSE_PROJECT_NAME=tosca_geoserver_dev
+
 ############################
 # POSTGRES (Shared DB)
 ############################
@@ -17,6 +18,7 @@ PG_SUPERPASS=postgres
 ############################
 # APPLICATION ROLES
 ############################
+
 # Django (API)
 PG_API_USER=tosca_api
 PG_API_PASSWORD=postgres_api
@@ -39,8 +41,8 @@ GEOSERVER_VERSION=2.27.2
 GEOSERVER_PORT=8080
 GEOSERVER_DATA_DIR=/geoserver_data/data
 
-GEOSERVER_ADMIN_USER=admin
-GEOSERVER_ADMIN_PASSWORD=geoserver
+GEOSERVER_ADMIN_USER=admin2
+GEOSERVER_ADMIN_PASSWORD=geoserver2
 
 ############################
 # GEOSERVER – JDBC BACKEND
@@ -82,6 +84,7 @@ ENABLE_JDBC_LOGIN=true
 JDBC_LOGIN_SERVICE_NAME=jdbc_login
 JDBC_AUTH_SERVICE_NAME=jdbc_auth
 
+
 ############################
 # GEOSERVER – CORS
 ############################
@@ -89,4 +92,9 @@ GEOSERVER_CORS_ENABLED=true
 GEOSERVER_CORS_ALLOWED_ORIGINS=*
 GEOSERVER_CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,HEAD,OPTIONS
 GEOSERVER_CORS_ALLOWED_HEADERS=*
+
+############################
+# GEOSERVER – OPTIONAL
+############################
+DISK_QUOTA_ENABLED=false
 
