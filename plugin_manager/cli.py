@@ -1,0 +1,71 @@
+import os
+import argparse
+
+from resolver import GeoServerContext, PluginResolver
+from installer import PluginInstaller
+
+
+def parse_list(value: str):
+    if not value:
+        return []
+    return [v.strip() for v in value.split(",") if v.strip()]
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="GeoServer plugin manager"
+    )
+
+    parser.add_argument("--version", help="GeoServer version (e.g. 2.27.2)")
+    parser.add_argument("--community", help="Community plugins (comma-separated)")
+    parser.add_argument("--official", help="Official plugins (comma-separated)")
+    parser.add_argument("--dry-run", action="store_true")
+
+    args = parser.parse_args()
+
+    # ENV fallback (Docker yolu)
+    version = args.version or os.getenv("GEOSERVER_VERSION")
+    community_raw = args.community or os.getenv("COMMUNITY_PLUGINS", "")
+    official_raw = args.official or os.getenv("OFFICIAL_PLUGINS", "")
+
+    if not version:
+        raise SystemExit("GEOSERVER_VERSION is required")
+
+    community = parse_list(community_raw)
+    official = parse_list(official_raw)
+
+    # 🔹 Context
+    ctx = GeoServerContext(version=version)
+
+    # 🔹 Resolver (only knows URLs)
+    resolver = PluginResolver(ctx)
+
+    # 🔹 Installer (only installs)
+    installer = PluginInstaller()
+
+    if args.dry_run:
+        print("🔎 Dry run")
+        for p in community:
+            print("COMMUNITY:", resolver.community(p))
+        for p in official:
+            print("OFFICIAL:", resolver.official(p))
+        return
+
+    # 🔹 Orchestration happens here
+    if community:
+        installer.install_many(
+            community,
+            resolver.community
+        )
+
+    if official:
+        installer.install_many(
+            official,
+            resolver.official
+        )
+
+    print("🎉 Plugin setup complete")
+
+
+if __name__ == "__main__":
+    main()
