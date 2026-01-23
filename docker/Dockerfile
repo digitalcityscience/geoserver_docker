@@ -32,6 +32,10 @@ ENV GEOSERVER_CORS_ALLOWED_HEADERS=*
 
 ENV JAVA_OPTS=${JAVA_OPTS}
 
+# Store image plugin signature (for fast runtime check)
+RUN mkdir -p /opt/geoserver && \
+    echo "${GEOSERVER_VERSION}|${DEFAULT_OFFICIAL_PLUGINS}|${DEFAULT_COMMUNITY_PLUGINS}" \
+    > /opt/geoserver/.image_plugins
 # -----------------------------
 # System dependencies
 # -----------------------------
