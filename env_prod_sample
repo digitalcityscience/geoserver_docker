@@ -6,8 +6,8 @@ COMPOSE_PROJECT_NAME=tosca_geoserver_dev
 ############################
 # ENV MODE
 ############################
-ENV=dev
-PROD_MODE=false
+ENV=prod
+PROD_MODE=true
 
 ############################
 # POSTGRES (Shared DB)
@@ -19,7 +19,7 @@ PG_DATABASE=tosca
 
 # PostgreSQL superuser (init / maintenance)
 PG_SUPERUSER=postgres
-PG_SUPERPASS=postgres
+PG_SUPERPASS=postgres_chang_me
 
 ############################
 # APPLICATION DB USERS
@@ -31,7 +31,7 @@ PG_SCHEMA_API=api_schema
 
 # GeoServer (used by JDBC security + jdbcconfig/jdbcstore)
 PG_GS_USER=tosca_gs
-PG_GS_PASSWORD=postgres_gs
+PG_GS_PASSWORD=postgres_gs_chang_me
 PG_SCHEMA_GEOSERVER=gs_auth_role_schema
 PG_SCHEMA_JDBCCONF=gs_jdbcconfig_schema
 PG_SCHEMA_GIS=gis_schema
@@ -45,7 +45,7 @@ GEOSERVER_DATA_DIR=/geoserver_data/data
 
 # Initial UI/REST admin (bootstrap user)
 GEOSERVER_ADMIN_USER=admin
-GEOSERVER_ADMIN_PASSWORD=geoserver
+GEOSERVER_ADMIN_PASSWORD=geoserver_chang_me
 
 ############################
 # REVERSE PROXY / PUBLIC URL

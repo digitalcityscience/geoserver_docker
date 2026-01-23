@@ -1,23 +1,39 @@
 .PHONY: which-env build up down restart logs rebuild rmVolumes password
 
 # -------------------------------------------------
-# ENV selection
+# ENV selection (DEFAULT = dev) or prod
 # -------------------------------------------------
 ENV ?= dev
-ENV_FILE := .env.$(ENV)
 
+ENV_FILE := .env.$(ENV)
+COMPOSE_FILE := docker-compose-$(ENV).yml
+
+# Safety: allow only dev / prod
+ifeq ($(ENV),dev)
+  COMPOSE_FILE := docker-compose-dev.yml
+endif
+
+ifeq ($(ENV),prod)
+  COMPOSE_FILE := docker-compose-prod.yml
+endif
+
+# -------------------------------------------------
+# Load env file
+# -------------------------------------------------
 ifneq ("$(wildcard $(ENV_FILE))","")
   include $(ENV_FILE)
   export $(shell sed -n 's/^\s*\([A-Za-z_][A-Za-z0-9_]*\)\s*=.*/\1/p' $(ENV_FILE))
 else
-  $(error Missing $(ENV_FILE))
+  $(error ❌ Missing $(ENV_FILE))
 endif
 
 # -------------------------------------------------
-# Image
+# Check compose file
 # -------------------------------------------------
-IMAGE_NAME ?= dcs-geoserver
-IMAGE_TAG  ?= $(GEOSERVER_VERSION)
+ifneq ("$(wildcard $(COMPOSE_FILE))","")
+else
+  $(error ❌ Missing $(COMPOSE_FILE))
+endif
 
 # -------------------------------------------------
 # Helpers
@@ -25,13 +41,17 @@ IMAGE_TAG  ?= $(GEOSERVER_VERSION)
 which-env:
 	@echo "🔧 ENV=$(ENV)"
 	@echo "📄 ENV_FILE=$(ENV_FILE)"
+	@echo "🐳 COMPOSE_FILE=$(COMPOSE_FILE)"
 
 # -------------------------------------------------
 # Build
 # -------------------------------------------------
 build: which-env
-	@echo "🐳 Building images (no cache)"
-	docker compose build --no-cache
+	@echo "🐳 Building ($(ENV))"
+	docker compose \
+		--env-file $(ENV_FILE) \
+		-f $(COMPOSE_FILE) \
+		build --no-cache
 
 # -------------------------------------------------
 # Up
@@ -42,14 +62,20 @@ up: which-env
 		bash scripts/check_prod_env.sh; \
 	fi
 	@echo "🚀 docker compose up ($(ENV))"
-	docker compose --env-file $(ENV_FILE) up -d \
+	docker compose \
+		--env-file $(ENV_FILE) \
+		-f $(COMPOSE_FILE) \
+		up -d
 
 # -------------------------------------------------
 # Down
 # -------------------------------------------------
-down:
-	@echo "🛑 docker compose down"
-	docker compose --env-file $(ENV_FILE) down
+down: which-env
+	@echo "🛑 docker compose down ($(ENV))"
+	docker compose \
+		--env-file $(ENV_FILE) \
+		-f $(COMPOSE_FILE) \
+		down
 
 # -------------------------------------------------
 # Restart
@@ -58,27 +84,40 @@ restart: down up
 
 # -------------------------------------------------
 # Logs
-#   make logs            -> all containers
-#   make logs geoserver  -> specific container
 # -------------------------------------------------
-logs:
+logs: which-env
 	@if [ -z "$(filter-out $@,$(MAKECMDGOALS))" ]; then \
-		docker compose logs -f; \
+		docker compose \
+			--env-file $(ENV_FILE) \
+			-f $(COMPOSE_FILE) \
+			logs -f; \
 	else \
-		docker compose logs -f $(filter-out $@,$(MAKECMDGOALS)); \
+		docker compose \
+			--env-file $(ENV_FILE) \
+			-f $(COMPOSE_FILE) \
+			logs -f $(filter-out $@,$(MAKECMDGOALS)); \
 	fi
 
 # -------------------------------------------------
-# Rebuild (safe)
+# Rebuild
 # -------------------------------------------------
 rebuild: which-env
-	@echo "♻️ Rebuilding images (no cache) and restarting stack"
-	docker compose build --no-cache
-	docker compose --env-file $(ENV_FILE) up -d
+	@echo "♻️ Rebuilding ($(ENV))"
+	docker compose \
+		--env-file $(ENV_FILE) \
+		-f $(COMPOSE_FILE) \
+		build --no-cache
+	docker compose \
+		--env-file $(ENV_FILE) \
+		-f $(COMPOSE_FILE) \
+		up -d
 
 # -------------------------------------------------
-# Volume cleanup (EXPLICIT, DANGEROUS)
+# Volume cleanup (DANGEROUS)
 # -------------------------------------------------
-rmVolumes:
-	@echo "⚠️  Removing Docker volumes (DATA LOSS)"
-	docker compose --env-file $(ENV_FILE) down -v
+rmVolumes: which-env
+	@echo "⚠️  Removing volumes ($(ENV))"
+	docker compose \
+		--env-file $(ENV_FILE) \
+		-f $(COMPOSE_FILE) \
+		down -v
