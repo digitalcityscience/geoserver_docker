@@ -61,29 +61,49 @@ fi
 # -------------------------------------------------------------------
 # Runtime plugin installation (from .env)
 # -------------------------------------------------------------------
+#!/bin/bash
+
 IMAGE_PLUGINS_FILE="/opt/geoserver/.image_plugins"
 
-# Runtime’da istenen plugin durumu
-RUNTIME_STATE="$(echo "${GEOSERVER_VERSION}|${OFFICIAL_PLUGINS:-}|${COMMUNITY_PLUGINS:-}" | sha256sum | awk '{print $1}')"
+# Runtime'da istenen plugin listesi
+RUNTIME_OFFICIAL="${OFFICIAL_PLUGINS:-}"
+RUNTIME_COMMUNITY="${COMMUNITY_PLUGINS:-}"
 
-# Image içine bake edilmiş plugin durumu
+# Image'a bake edilmiş plugin listesi
 if [ -f "$IMAGE_PLUGINS_FILE" ]; then
-  IMAGE_STATE="$(cat "$IMAGE_PLUGINS_FILE" | sha256sum | awk '{print $1}')"
+  IMAGE_CONTENT="$(cat "$IMAGE_PLUGINS_FILE")"
+  IMAGE_VERSION="$(echo "$IMAGE_CONTENT" | cut -d'|' -f1)"
+  IMAGE_OFFICIAL="$(echo "$IMAGE_CONTENT" | cut -d'|' -f2)"
+  IMAGE_COMMUNITY="$(echo "$IMAGE_CONTENT" | cut -d'|' -f3)"
 else
-  IMAGE_STATE=""
+  IMAGE_OFFICIAL=""
+  IMAGE_COMMUNITY=""
 fi
 
-if [ "$RUNTIME_STATE" = "$IMAGE_STATE" ]; then
+# Eğer runtime ile image aynıysa, hiçbir şey yapma
+if [ "$RUNTIME_OFFICIAL" = "$IMAGE_OFFICIAL" ] && [ "$RUNTIME_COMMUNITY" = "$IMAGE_COMMUNITY" ]; then
   echo "✅ Plugins already baked into image, skipping installation"
 else
-  echo "🧩 Plugin configuration differs from image, installing plugins..."
-  python3 /opt/geoserver/plugin_manager/cli.py \
-    --version "${GEOSERVER_VERSION}" \
-    --official "${OFFICIAL_PLUGINS:-}" \
-    --community "${COMMUNITY_PLUGINS:-}"
-  echo "✅ Plugins installed / updated"
+  echo "🧩 Plugin configuration differs from image..."
+  
+  # Sadece FARK olan pluginleri bul
+  NEW_OFFICIAL=$(comm -13 <(echo "$IMAGE_OFFICIAL" | tr ',' '\n' | sort) <(echo "$RUNTIME_OFFICIAL" | tr ',' '\n' | sort) | tr '\n' ',' | sed 's/,$//')
+  NEW_COMMUNITY=$(comm -13 <(echo "$IMAGE_COMMUNITY" | tr ',' '\n' | sort) <(echo "$RUNTIME_COMMUNITY" | tr ',' '\n' | sort) | tr '\n' ',' | sed 's/,$//')
+  
+  if [ -z "$NEW_OFFICIAL" ] && [ -z "$NEW_COMMUNITY" ]; then
+    echo "✅ No new plugins to install"
+  else
+    echo "📦 Installing additional plugins..."
+    [ -n "$NEW_OFFICIAL" ] && echo "   Official: $NEW_OFFICIAL"
+    [ -n "$NEW_COMMUNITY" ] && echo "   Community: $NEW_COMMUNITY"
+    
+    python3 /opt/geoserver/plugin_manager/cli.py \
+      --version "${GEOSERVER_VERSION}" \
+      --official "${NEW_OFFICIAL}" \
+      --community "${NEW_COMMUNITY}"
+    echo "✅ Additional plugins installed"
+  fi
 fi
-
 # -------------------------------------------------------------------
 # 5) Start Tomcat (PID 1)
 # -------------------------------------------------------------------
