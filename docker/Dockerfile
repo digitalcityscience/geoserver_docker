@@ -24,7 +24,6 @@ ENV GEOSERVER_DATA_DIR="/geoserver_data/data"
 ENV OFFICIAL_PLUGINS=${DEFAULT_OFFICIAL_PLUGINS}
 ENV COMMUNITY_PLUGINS=${DEFAULT_COMMUNITY_PLUGINS}
 
-
 ENV GEOSERVER_CORS_ENABLED=true
 ENV GEOSERVER_CORS_ALLOWED_ORIGINS=*
 ENV GEOSERVER_CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,HEAD,OPTIONS
@@ -36,10 +35,13 @@ ENV JAVA_OPTS=${JAVA_OPTS}
 RUN mkdir -p /opt/geoserver && \
     echo "${GEOSERVER_VERSION}|${DEFAULT_OFFICIAL_PLUGINS}|${DEFAULT_COMMUNITY_PLUGINS}" \
     > /opt/geoserver/.image_plugins
+
 # -----------------------------
 # System dependencies
 # -----------------------------
-RUN apt-get update && apt-get install -y \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y \
     curl wget unzip procps \
     python3 python3-pip \
     gettext-base \
@@ -48,9 +50,14 @@ RUN apt-get update && apt-get install -y \
 # -----------------------------
 # Download & install GeoServer (BUILD-TIME, FIXED)
 # -----------------------------
-RUN cd /usr/local/tomcat/webapps && \
-    curl -fL https://downloads.sourceforge.net/project/geoserver/GeoServer/${GEOSERVER_VERSION}/geoserver-${GEOSERVER_VERSION}-war.zip \
-      -o geoserver.zip && \
+RUN --mount=type=cache,target=/tmp/geoserver-cache \
+    cd /usr/local/tomcat/webapps && \
+    CACHE_FILE="/tmp/geoserver-cache/geoserver-${GEOSERVER_VERSION}-war.zip" && \
+    if [ ! -f "${CACHE_FILE}" ]; then \
+        curl -fL https://downloads.sourceforge.net/project/geoserver/GeoServer/${GEOSERVER_VERSION}/geoserver-${GEOSERVER_VERSION}-war.zip \
+          -o "${CACHE_FILE}"; \
+    fi && \
+    cp "${CACHE_FILE}" geoserver.zip && \
     unzip -q geoserver.zip && \
     unzip -q geoserver.war -d geoserver && \
     rm -f geoserver.zip geoserver.war && \
@@ -59,6 +66,7 @@ RUN cd /usr/local/tomcat/webapps && \
 # Store image GeoServer version for runtime mismatch warning
 RUN mkdir -p /opt/geoserver && \
     echo "${GEOSERVER_VERSION}" > /opt/geoserver/.image_version
+
 # -----------------------------
 # Plugin manager (runtime use)
 # -----------------------------

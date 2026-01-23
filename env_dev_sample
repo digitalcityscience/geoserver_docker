@@ -73,7 +73,12 @@ GEOSERVER_JVM_XMX=2G
 
 ############################
 # GEOSERVER – PLUGINS
+#  When you add new plugin, it will be installed automatically on GeoServer startup but it will take while for first startup.
+#  !!!    so be patient !!!!
+# or if you need one of the plugins for your project, please add it github action settings and publish your own image.
+# You will save time for every new startup.
 ############################
+
 OFFICIAL_PLUGINS=gdal,monitor,vectortiles,mbstyle
 COMMUNITY_PLUGINS=jdbcconfig,jdbcstore,sec-oauth2-openid-connect
 
