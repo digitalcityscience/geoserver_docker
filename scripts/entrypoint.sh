@@ -61,36 +61,29 @@ fi
 # -------------------------------------------------------------------
 # Runtime plugin installation (from .env)
 # -------------------------------------------------------------------
-
-PLUGIN_STATE_FILE="${GEOSERVER_DATA_DIR}/.plugins_state"
 IMAGE_PLUGINS_FILE="/opt/geoserver/.image_plugins"
 
+# Runtime’da istenen plugin durumu
 RUNTIME_STATE="$(echo "${GEOSERVER_VERSION}|${OFFICIAL_PLUGINS:-}|${COMMUNITY_PLUGINS:-}" | sha256sum | awk '{print $1}')"
 
+# Image içine bake edilmiş plugin durumu
 if [ -f "$IMAGE_PLUGINS_FILE" ]; then
-  IMAGE_STATE="$(sha256sum "$IMAGE_PLUGINS_FILE" | awk '{print $1}')"
+  IMAGE_STATE="$(cat "$IMAGE_PLUGINS_FILE" | sha256sum | awk '{print $1}')"
 else
   IMAGE_STATE=""
 fi
 
-if [ -f "$PLUGIN_STATE_FILE" ]; then
-  LAST_STATE="$(cat "$PLUGIN_STATE_FILE")"
-else
-  LAST_STATE=""
-fi
-
-if [ "$RUNTIME_STATE" = "$IMAGE_STATE" ] && [ "$LAST_STATE" = "$RUNTIME_STATE" ]; then
+if [ "$RUNTIME_STATE" = "$IMAGE_STATE" ]; then
   echo "✅ Plugins already baked into image, skipping installation"
 else
-  echo "🧩 Plugin configuration changed, installing plugins..."
+  echo "🧩 Plugin configuration differs from image, installing plugins..."
   python3 /opt/geoserver/plugin_manager/cli.py \
     --version "${GEOSERVER_VERSION}" \
     --official "${OFFICIAL_PLUGINS:-}" \
     --community "${COMMUNITY_PLUGINS:-}"
-
-  echo "$RUNTIME_STATE" > "$PLUGIN_STATE_FILE"
   echo "✅ Plugins installed / updated"
 fi
+
 # -------------------------------------------------------------------
 # 5) Start Tomcat (PID 1)
 # -------------------------------------------------------------------

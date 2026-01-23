@@ -35,16 +35,16 @@ services:
     restart: unless-stopped
 
   geoserver:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-      platforms:
-        - linux/arm64
-        # - linux/amd64 # Intel/AMD (CI, servers) – enable for x86_64 builds
-      args:
-        GEOSERVER_VERSION: ${GEOSERVER_VERSION}
-    image: dcs-geoserver:${GEOSERVER_VERSION} #dev purpose local image name
-    #   image: ghcr.io/digitalcityscience/tosca-geoserver:2.27.2
+    # build:
+    #   context: .
+    #   dockerfile: docker/Dockerfile
+    #   platforms:
+    #     - linux/arm64
+    #     # - linux/amd64 # Intel/AMD (CI, servers) – enable for x86_64 builds
+    #   args:
+    #     GEOSERVER_VERSION: ${GEOSERVER_VERSION}
+    # image: dcs-geoserver:${GEOSERVER_VERSION} #dev purpose local image name
+    image: ghcr.io/digitalcityscience/tosca-geoserver:2.27.2
     container_name: tosca-geoserver
     env_file:
       - .env.dev
