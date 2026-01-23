@@ -59,6 +59,25 @@ if [ -n "${PROXY_BASE_URL:-}" ]; then
 fi
 
 # -------------------------------------------------------------------
+# Runtime plugin installation (from .env)
+# -------------------------------------------------------------------
+
+PLUGIN_STATE_FILE="${GEOSERVER_DATA_DIR}/.plugins_state"
+PLUGIN_STATE="$(echo "${GEOSERVER_VERSION}|${OFFICIAL_PLUGINS:-}|${COMMUNITY_PLUGINS:-}" | sha256sum | awk '{print $1}')"
+if [ ! -f "$PLUGIN_STATE_FILE" ] || [ "$(cat $PLUGIN_STATE_FILE)" != "$PLUGIN_STATE" ]; then
+  echo "🧩 Plugin configuration changed, installing plugins..."
+  python3 /opt/geoserver/plugin_manager/cli.py \
+    --version "${GEOSERVER_VERSION}" \
+    --official "${OFFICIAL_PLUGINS:-}" \
+    --community "${COMMUNITY_PLUGINS:-}"
+
+  echo "$PLUGIN_STATE" > "$PLUGIN_STATE_FILE"
+  echo "✅ Plugins installed / updated"
+else
+  echo "ℹ️  Plugin configuration unchanged, skipping"
+fi
+
+# -------------------------------------------------------------------
 # 5) Start Tomcat (PID 1)
 # -------------------------------------------------------------------
 echo "Starting Tomcat..."

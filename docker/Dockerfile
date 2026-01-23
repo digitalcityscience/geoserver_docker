@@ -3,20 +3,27 @@
 # -----------------------------
 ARG IMAGE_VERSION=9.0.106-jdk11-temurin-jammy
 FROM tomcat:${IMAGE_VERSION}
-
 LABEL maintainer="orttak"
 
 # -----------------------------
-# Build-time args
+# Build-time args (IMAGE IDENTITY)
 # -----------------------------
 ARG GEOSERVER_VERSION=2.27.2
 ARG JAVA_OPTS="-Xms512m -Xmx1024m"
+# Build-time defaults
+ARG DEFAULT_OFFICIAL_PLUGINS="gdal,monitor,vectortiles,mbstyle"
+ARG DEFAULT_COMMUNITY_PLUGINS="jdbcconfig,jdbcstore,sec-oauth2-openid-connect"
 
 # -----------------------------
-# Runtime ENV
+# Runtime ENV (OVERRIDABLE IN DEV)
 # -----------------------------
 ENV GEOSERVER_VERSION=${GEOSERVER_VERSION}
 ENV GEOSERVER_DATA_DIR="/geoserver_data/data"
+
+# Runtime defaults (image içinden gelir)
+ENV OFFICIAL_PLUGINS=${DEFAULT_OFFICIAL_PLUGINS}
+ENV COMMUNITY_PLUGINS=${DEFAULT_COMMUNITY_PLUGINS}
+
 
 ENV GEOSERVER_CORS_ENABLED=true
 ENV GEOSERVER_CORS_ALLOWED_ORIGINS=*
@@ -31,26 +38,30 @@ ENV JAVA_OPTS=${JAVA_OPTS}
 RUN apt-get update && apt-get install -y \
     curl wget unzip procps \
     python3 python3-pip \
-    && apt-get install -y gettext-base \
-    && rm -rf /var/lib/apt/lists/* 
+    gettext-base \
+    && rm -rf /var/lib/apt/lists/*
+
 # -----------------------------
-# Download & install GeoServer
+# Download & install GeoServer (BUILD-TIME, FIXED)
 # -----------------------------
 RUN cd /usr/local/tomcat/webapps && \
-    wget -q https://sourceforge.net/projects/geoserver/files/GeoServer/${GEOSERVER_VERSION}/geoserver-${GEOSERVER_VERSION}-war.zip \
-      -O geoserver.zip && \
+    curl -fL https://downloads.sourceforge.net/project/geoserver/GeoServer/${GEOSERVER_VERSION}/geoserver-${GEOSERVER_VERSION}-war.zip \
+      -o geoserver.zip && \
     unzip -q geoserver.zip && \
     unzip -q geoserver.war -d geoserver && \
     rm -f geoserver.zip geoserver.war && \
     mkdir -p ${GEOSERVER_DATA_DIR}
 
+# Store image GeoServer version for runtime mismatch warning
+RUN mkdir -p /opt/geoserver && \
+    echo "${GEOSERVER_VERSION}" > /opt/geoserver/.image_version
 # -----------------------------
-# Plugin manager (Python stays)
+# Plugin manager (runtime use)
 # -----------------------------
 COPY plugin_manager /opt/geoserver/plugin_manager
 
 # -----------------------------
-# Security + entrypoint scripts (XML-based password init)
+# Entrypoint & helper scripts
 # -----------------------------
 COPY scripts /scripts
 RUN chmod +x /scripts/*.sh
@@ -59,11 +70,8 @@ RUN chmod +x /scripts/*.sh
 # Volumes
 # -----------------------------
 VOLUME ${GEOSERVER_DATA_DIR}
-RUN python3 /opt/geoserver/plugin_manager/cli.py \
-  --version ${GEOSERVER_VERSION} \
-  --community "${COMMUNITY_PLUGINS}" \
-  --official "${OFFICIAL_PLUGINS}"
+
 # -----------------------------
-# Start (entrypoint handles password init + then Tomcat)
+# Start (runtime logic in entrypoint)
 # -----------------------------
 ENTRYPOINT ["/scripts/entrypoint.sh"]
