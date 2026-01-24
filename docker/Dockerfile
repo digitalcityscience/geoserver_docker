@@ -15,12 +15,12 @@ ARG DEFAULT_OFFICIAL_PLUGINS="gdal,monitor,vectortiles,mbstyle"
 ARG DEFAULT_COMMUNITY_PLUGINS="jdbcconfig,jdbcstore,sec-oauth2-openid-connect"
 
 # -----------------------------
-# Runtime ENV (OVERRIDABLE IN DEV)
+# Runtime ENV 
 # -----------------------------
 ENV GEOSERVER_VERSION=${GEOSERVER_VERSION}
 ENV GEOSERVER_DATA_DIR="/geoserver_data/data"
 
-# Runtime defaults (image içinden gelir)
+# Runtime defaults 
 ENV OFFICIAL_PLUGINS=${DEFAULT_OFFICIAL_PLUGINS}
 ENV COMMUNITY_PLUGINS=${DEFAULT_COMMUNITY_PLUGINS}
 
@@ -30,11 +30,6 @@ ENV GEOSERVER_CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,HEAD,OPTIONS
 ENV GEOSERVER_CORS_ALLOWED_HEADERS=*
 
 ENV JAVA_OPTS=${JAVA_OPTS}
-
-# Store image plugin signature (for fast runtime check)
-RUN mkdir -p /opt/geoserver && \
-    echo "${GEOSERVER_VERSION}|${DEFAULT_OFFICIAL_PLUGINS}|${DEFAULT_COMMUNITY_PLUGINS}" \
-    > /opt/geoserver/.image_plugins
 
 # -----------------------------
 # System dependencies
@@ -48,7 +43,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------
-# Download & install GeoServer (BUILD-TIME, FIXED)
+# Download & install GeoServer 
 # -----------------------------
 RUN --mount=type=cache,target=/tmp/geoserver-cache \
     cd /usr/local/tomcat/webapps && \
@@ -68,9 +63,22 @@ RUN mkdir -p /opt/geoserver && \
     echo "${GEOSERVER_VERSION}" > /opt/geoserver/.image_version
 
 # -----------------------------
-# Plugin manager (runtime use)
+# Plugin manager (build + runtime use)
 # -----------------------------
 COPY plugin_manager /opt/geoserver/plugin_manager
+
+# -----------------------------
+# Install base plugins at BUILD TIME
+# -----------------------------
+RUN python3 /opt/geoserver/plugin_manager/cli.py \
+    --version "${GEOSERVER_VERSION}" \
+    --official "${DEFAULT_OFFICIAL_PLUGINS}" \
+    --community "${DEFAULT_COMMUNITY_PLUGINS}" && \
+    echo "Base plugins installed successfully"
+
+# Store what plugins are actually baked into the image
+RUN echo "${GEOSERVER_VERSION}|${DEFAULT_OFFICIAL_PLUGINS}|${DEFAULT_COMMUNITY_PLUGINS}" \
+    > /opt/geoserver/.image_plugins
 
 # -----------------------------
 # Entrypoint & helper scripts

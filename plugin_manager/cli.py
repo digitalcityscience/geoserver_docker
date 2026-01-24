@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--community", help="Community plugins (comma-separated)")
     parser.add_argument("--official", help="Official plugins (comma-separated)")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--test-lib-dir", help="Test lib directory for plugin installation")
 
     args = parser.parse_args()
 
@@ -41,7 +42,14 @@ def main():
     resolver = PluginResolver(ctx)
 
     # 🔹 Installer (only installs)
-    installer = PluginInstaller()
+    if args.test_lib_dir:
+        from pathlib import Path
+        installer = PluginInstaller(
+            geoserver_lib=Path(args.test_lib_dir),
+            tmp_dir=Path("/tmp/geoserver-plugins-test")
+        )
+    else:
+        installer = PluginInstaller()
 
     if args.dry_run:
         print("🔎 Dry run")
