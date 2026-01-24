@@ -31,11 +31,6 @@ ENV GEOSERVER_CORS_ALLOWED_HEADERS=*
 
 ENV JAVA_OPTS=${JAVA_OPTS}
 
-# Store image plugin signature (for fast runtime check)
-RUN mkdir -p /opt/geoserver && \
-    echo "${GEOSERVER_VERSION}|${DEFAULT_OFFICIAL_PLUGINS}|${DEFAULT_COMMUNITY_PLUGINS}" \
-    > /opt/geoserver/.image_plugins
-
 # -----------------------------
 # System dependencies
 # -----------------------------
@@ -68,9 +63,22 @@ RUN mkdir -p /opt/geoserver && \
     echo "${GEOSERVER_VERSION}" > /opt/geoserver/.image_version
 
 # -----------------------------
-# Plugin manager (runtime use)
+# Plugin manager (build + runtime use)
 # -----------------------------
 COPY plugin_manager /opt/geoserver/plugin_manager
+
+# -----------------------------
+# Install base plugins at BUILD TIME
+# -----------------------------
+RUN python3 /opt/geoserver/plugin_manager/cli.py \
+    --version "${GEOSERVER_VERSION}" \
+    --official "${DEFAULT_OFFICIAL_PLUGINS}" \
+    --community "${DEFAULT_COMMUNITY_PLUGINS}" && \
+    echo "Base plugins installed successfully"
+
+# Store what plugins are actually baked into the image
+RUN echo "${GEOSERVER_VERSION}|${DEFAULT_OFFICIAL_PLUGINS}|${DEFAULT_COMMUNITY_PLUGINS}" \
+    > /opt/geoserver/.image_plugins
 
 # -----------------------------
 # Entrypoint & helper scripts

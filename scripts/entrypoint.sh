@@ -81,20 +81,20 @@ fi
 
 # Eğer runtime ile image aynıysa, hiçbir şey yapma
 if [ "$RUNTIME_OFFICIAL" = "$IMAGE_OFFICIAL" ] && [ "$RUNTIME_COMMUNITY" = "$IMAGE_COMMUNITY" ]; then
-  echo "✅ Plugins already baked into image, skipping installation"
+  echo "✅ Using base plugins from image, no additional plugins needed"
 else
   echo "🧩 Plugin configuration differs from image..."
   
-  # Sadece FARK olan pluginleri bul
-  NEW_OFFICIAL=$(comm -13 <(echo "$IMAGE_OFFICIAL" | tr ',' '\n' | sort) <(echo "$RUNTIME_OFFICIAL" | tr ',' '\n' | sort) | tr '\n' ',' | sed 's/,$//')
-  NEW_COMMUNITY=$(comm -13 <(echo "$IMAGE_COMMUNITY" | tr ',' '\n' | sort) <(echo "$RUNTIME_COMMUNITY" | tr ',' '\n' | sort) | tr '\n' ',' | sed 's/,$//')
+  # Sadece FARK olan pluginleri bul (runtime'da olan ama image'da olmayan)
+  NEW_OFFICIAL=$(comm -23 <(echo "$RUNTIME_OFFICIAL" | tr ',' '\n' | sort) <(echo "$IMAGE_OFFICIAL" | tr ',' '\n' | sort) | tr '\n' ',' | sed 's/,$//')
+  NEW_COMMUNITY=$(comm -23 <(echo "$RUNTIME_COMMUNITY" | tr ',' '\n' | sort) <(echo "$IMAGE_COMMUNITY" | tr ',' '\n' | sort) | tr '\n' ',' | sed 's/,$//')
   
   if [ -z "$NEW_OFFICIAL" ] && [ -z "$NEW_COMMUNITY" ]; then
-    echo "✅ No new plugins to install"
+    echo "✅ No additional plugins to install"
   else
     echo "📦 Installing additional plugins..."
-    [ -n "$NEW_OFFICIAL" ] && echo "   Official: $NEW_OFFICIAL"
-    [ -n "$NEW_COMMUNITY" ] && echo "   Community: $NEW_COMMUNITY"
+    [ -n "$NEW_OFFICIAL" ] && echo "   Additional Official: $NEW_OFFICIAL"
+    [ -n "$NEW_COMMUNITY" ] && echo "   Additional Community: $NEW_COMMUNITY"
     
     python3 /opt/geoserver/plugin_manager/cli.py \
       --version "${GEOSERVER_VERSION}" \
