@@ -61,7 +61,6 @@ fi
 # -------------------------------------------------------------------
 # Runtime plugin installation (from .env)
 # -------------------------------------------------------------------
-#!/bin/bash
 
 IMAGE_PLUGINS_FILE="/opt/geoserver/.image_plugins"
 
