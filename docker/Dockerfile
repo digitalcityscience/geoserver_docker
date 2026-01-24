@@ -15,12 +15,12 @@ ARG DEFAULT_OFFICIAL_PLUGINS="gdal,monitor,vectortiles,mbstyle"
 ARG DEFAULT_COMMUNITY_PLUGINS="jdbcconfig,jdbcstore,sec-oauth2-openid-connect"
 
 # -----------------------------
-# Runtime ENV (OVERRIDABLE IN DEV)
+# Runtime ENV 
 # -----------------------------
 ENV GEOSERVER_VERSION=${GEOSERVER_VERSION}
 ENV GEOSERVER_DATA_DIR="/geoserver_data/data"
 
-# Runtime defaults (image içinden gelir)
+# Runtime defaults 
 ENV OFFICIAL_PLUGINS=${DEFAULT_OFFICIAL_PLUGINS}
 ENV COMMUNITY_PLUGINS=${DEFAULT_COMMUNITY_PLUGINS}
 
@@ -43,7 +43,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------
-# Download & install GeoServer (BUILD-TIME, FIXED)
+# Download & install GeoServer 
 # -----------------------------
 RUN --mount=type=cache,target=/tmp/geoserver-cache \
     cd /usr/local/tomcat/webapps && \
