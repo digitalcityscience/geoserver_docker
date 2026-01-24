@@ -33,5 +33,5 @@ class PluginResolver:
         return (
             f"{self.BASE_OFFICIAL}/"
             f"{self.ctx.version}/extensions/"
-            f"geoserver-{self.ctx.version}-{plugin}-plugin.zip"
+            f"geoserver-{self.ctx.version}-{plugin}-plugin.zip/download"
         )
