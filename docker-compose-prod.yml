@@ -22,19 +22,15 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./docker/initdb:/docker-entrypoint-initdb.d
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${PG_SUPERUSER} -d ${PG_DATABASE} -h 127.0.0.1 -p 5432",
-        ]
-      interval: 5s
-      timeout: 3s
-      retries: 30
     restart: unless-stopped
 
   geoserver:
-    image: ghcr.io/digitalcityscience/tosca-geoserver:2.27.2
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        GEOSERVER_VERSION: ${GEOSERVER_VERSION:-2.27.2}
+    image: tosca-geoserver-local:${GEOSERVER_VERSION:-2.27.2}
     container_name: tosca-geoserver
     env_file:
       - .env.prod
@@ -43,14 +39,6 @@ services:
     volumes:
       - geoserver_data:/geoserver_data/data
       - /LOCAL_:/mnt/home
-    depends_on:
-      db:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/geoserver/web"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
     restart: unless-stopped
 volumes:
   pg_data:

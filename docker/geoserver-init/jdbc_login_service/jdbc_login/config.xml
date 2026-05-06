@@ -8,7 +8,7 @@
   <driverClassName>org.postgresql.Driver</driverClassName>
   <connectURL>jdbc:postgresql://db:5432/tosca?currentSchema=gs_auth_role_schema</connectURL>
   <userName>tosca_gs</userName>
-  <password>postgres_gs</password>
+  <password>21sWrTu9s8d7f6g5h4j3k2l1a!.Pthds</password>
   <creatingTables>true</creatingTables>
   <passwordEncoderName>strongPbePasswordEncoder</passwordEncoderName>
   <passwordPolicyName>default</passwordPolicyName>
