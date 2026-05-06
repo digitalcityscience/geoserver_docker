@@ -13,8 +13,10 @@ PROD_MODE=true
 # POSTGRES (Shared DB)
 ############################
 PG_HOST=db
-PG_PORT=5438              # host->container port mapping (compose)
-PG_DOCKER_PORT=5432        # container internal port
+# host->container port mapping (compose)
+PG_PORT=5438
+# container internal port
+PG_DOCKER_PORT=5432  
 PG_DATABASE=tosca
 
 # PostgreSQL superuser (init / maintenance)
@@ -89,8 +91,9 @@ ENABLE_JDBC_CONFIG=true
 ############################
 # GEOSERVER – JVM
 ############################
-GEOSERVER_JVM_XMS=1G
-GEOSERVER_JVM_XMX=2G
+GEOSERVER_JVM_XMS=8G
+GEOSERVER_JVM_XMX=12G
+JAVA_OPTS="-Xms2g -Xmx4g -DGEOSERVER_CSRF_WHITELIST=geoserver.sample.de"
 
 ############################
 # GEOSERVER – PLUGINS
