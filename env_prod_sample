@@ -1,122 +1,127 @@
 ############################
-# GLOBAL
+# Global
 ############################
-COMPOSE_PROJECT_NAME=tosca_geoserver_dev
-
-############################
-# ENV MODE
-############################
+COMPOSE_PROJECT_NAME=tosca_geoserver_prod
 ENV=prod
 PROD_MODE=true
 
 ############################
-# POSTGRES (Shared DB)
+# Core
+############################
+GEOSERVER_VERSION=2.28.3
+GEOSERVER_HOST_PORT=8080
+GEOSERVER_CONTAINER_PORT=8080
+GEOSERVER_DATA_DIR=/geoserver_data/data
+GEOSERVER_SECURITY_MODE=default
+
+############################
+# Admin bootstrap
+############################
+GEOSERVER_ADMIN_USER=admin
+GEOSERVER_ADMIN_PASSWORD=change_me_prod
+GEOSERVER_DISABLE_DEFAULT_ADMIN=false
+
+############################
+# URLs and reverse proxy
+############################
+# Internal URL is used only inside the GeoServer container for bootstrap scripts.
+GEOSERVER_INTERNAL_URL=http://localhost:8080/geoserver
+
+# Public URL is used by users, clients, redirects, and generated links.
+GEOSERVER_PUBLIC_URL=https://geoserver.example.com/geoserver
+
+# In production, GeoServer proxyBaseUrl should usually match GEOSERVER_PUBLIC_URL.
+PROXY_BASE_URL=https://geoserver.example.com/geoserver
+GEOSERVER_USE_HEADERS_PROXY_URL=true
+
+############################
+# CORS and CSRF
+############################
+GEOSERVER_CORS_ENABLED=true
+GEOSERVER_CORS_ALLOWED_ORIGINS=https://app.example.com
+GEOSERVER_CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,HEAD,OPTIONS
+GEOSERVER_CORS_ALLOWED_HEADERS=Authorization,Content-Type,X-Requested-With
+GEOSERVER_ALLOW_WILDCARD_CORS=false
+GEOSERVER_CSRF_WHITELIST=geoserver.example.com
+GEOSERVER_CSRF_DISABLED=false
+
+############################
+# Plugins
+############################
+OFFICIAL_PLUGINS=gdal,monitor,vectortiles,mbstyle
+COMMUNITY_PLUGINS=sec-oidc
+BUILD_JDBC_PLUGINS=false
+
+############################
+# PostgreSQL ports
+############################
+POSTGRES_HOST_PORT=5438
+POSTGRES_CONTAINER_PORT=5432
+
+############################
+# JDBC optional
+############################
+GEOSERVER_ENABLE_JDBC_ROLE=false
+GEOSERVER_ENABLE_JDBC_AUTH=false
+GEOSERVER_ENABLE_JDBC_CONFIG=false
+GEOSERVER_JDBC_EXTRA_ROLES=
+GEOSERVER_JDBC_CONFIG_IMPORT=false
+
+############################
+# PostgreSQL shared database
 ############################
 PG_HOST=db
-# host->container port mapping (compose)
-PG_PORT=5438
-# container internal port
-PG_DOCKER_PORT=5432  
 PG_DATABASE=tosca
-
-# PostgreSQL superuser (init / maintenance)
 PG_SUPERUSER=postgres
-PG_SUPERPASS=postgres_chang_me
+PG_SUPERPASS=change_me_postgres_superuser
 
 ############################
-# APPLICATION DB USERS
+# Application database users
 ############################
-# Django (API)
 PG_API_USER=tosca_api
-PG_API_PASSWORD=postgres_api
-PG_SCHEMA_API=api_schema
-
-# GeoServer (used by JDBC security + jdbcconfig/jdbcstore)
+PG_API_PASSWORD=change_me_api_database
 PG_GS_USER=tosca_gs
-PG_GS_PASSWORD=postgres_gs_chang_me
+PG_GS_PASSWORD=change_me_geoserver_database
+
+############################
+# PostgreSQL schemas
+############################
+PG_SCHEMA_API=api_schema
 PG_SCHEMA_GEOSERVER=gs_auth_role_schema
-PG_SCHEMA_JDBCCONF=gs_jdbcconfig_schema
 PG_SCHEMA_GIS=gis_schema
+PG_SCHEMA_JDBCCONF=gs_jdbcconfig_schema
 
 ############################
-# GEOSERVER CORE
-############################
-GEOSERVER_VERSION=2.27.2
-GEOSERVER_PORT=8080
-GEOSERVER_DATA_DIR=/geoserver_data/data
-
-# Initial UI/REST admin (bootstrap user)
-GEOSERVER_ADMIN_USER=admin
-GEOSERVER_ADMIN_PASSWORD=geoserver_chang_me
-
-############################
-# REVERSE PROXY / PUBLIC URL
-############################
-# DEV: usually empty (no proxy). If you access via a host domain, set it.
-# Example (dev): http://localhost:8080/geoserver
-PROXY_BASE_URL=
-
-############################
-# GEOSERVER – JDBC BACKEND (security + jdbcconfig)
+# JDBC backend compatibility
 ############################
 GEOSERVER_DB_BACKEND=POSTGRES
 GEOSERVER_DB_HOST=${PG_HOST}
-GEOSERVER_DB_PORT=${PG_DOCKER_PORT}
+GEOSERVER_DB_PORT=${POSTGRES_CONTAINER_PORT}
 GEOSERVER_DB_NAME=${PG_DATABASE}
 GEOSERVER_DB_USER=${PG_GS_USER}
 GEOSERVER_DB_PASSWORD=${PG_GS_PASSWORD}
 GEOSERVER_DB_SCHEMA=${PG_SCHEMA_GEOSERVER}
+GS_JDBC_URL=jdbc:postgresql://${PG_HOST}:${POSTGRES_CONTAINER_PORT}/${PG_DATABASE}?currentSchema=${PG_SCHEMA_GEOSERVER}
 
-# JDBC URL used by templates (roles/login services)
-GS_JDBC_URL=jdbc:postgresql://${PG_HOST}:${PG_DOCKER_PORT}/${PG_DATABASE}?currentSchema=${PG_SCHEMA_GEOSERVER}
-
-############################
-# GEOSERVER – JDBC SECURITY SERVICES
-############################
-ENABLE_JDBC_LOGIN=true
+# Backward-compatible aliases used by existing JDBC templates and helper scripts.
+PG_PORT=${POSTGRES_HOST_PORT}
+PG_DOCKER_PORT=${POSTGRES_CONTAINER_PORT}
+ENABLE_JDBC_CONFIG=${GEOSERVER_ENABLE_JDBC_CONFIG}
+ENABLE_JDBC_LOGIN=${GEOSERVER_ENABLE_JDBC_AUTH}
 JDBC_LOGIN_SERVICE_NAME=jdbc_login
 JDBC_AUTH_SERVICE_NAME=jdbc_auth
 
-# Role service naming + seed roles
+############################
+# JDBC role service
+############################
 GS_ROLE_SERVICE_NAME=jdbc_role
 GS_ADMIN_ROLE=ADMIN
 GS_GROUP_ADMIN_ROLE=GROUP_ADMIN
 
 ############################
-# GEOSERVER – JDBC CONFIG BACKEND (catalog in DB)
-############################
-ENABLE_JDBC_CONFIG=true
-# jdbcconfig connects using PG_SCHEMA_JDBCCONF (your bootstrap script sets it)
-
-############################
-# GEOSERVER – JVM
+# JVM and optional features
 ############################
 GEOSERVER_JVM_XMS=8G
 GEOSERVER_JVM_XMX=12G
-JAVA_OPTS="-Xms2g -Xmx4g -DGEOSERVER_CSRF_WHITELIST=geoserver.sample.de"
-
-############################
-# GEOSERVER – PLUGINS
-#  When you add new plugin, it will be installed automatically on GeoServer startup but it will take while for first startup.
-#  !!!    so be patient !!!!
-# or if you need one of the plugins for your project, please add it github action settings and publish your own image.
-# You will save time for every new startup.
-############################
-OFFICIAL_PLUGINS=gdal,monitor,vectortiles,mbstyle
-COMMUNITY_PLUGINS=jdbcconfig,jdbcstore,sec-oauth2-openid-connect
-
-############################
-# GEOSERVER – CORS
-############################
-GEOSERVER_CORS_ENABLED=true
-
-# DEV OPTION A (recommended): restrict to your dev frontend origins
-# Example: http://localhost:5173,https://dev.your-frontend.tld
-GEOSERVER_CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
-
-# DEV OPTION B (only if you really need): allow all (NOT for prod)
-# GEOSERVER_CORS_ALLOWED_ORIGINS=*
-
-GEOSERVER_CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,HEAD,OPTIONS
-GEOSERVER_CORS_ALLOWED_HEADERS=Authorization,Content-Type
-
+JAVA_OPTS="-Xms2g -Xmx4g"
+DISK_QUOTA_ENABLED=false

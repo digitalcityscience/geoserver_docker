@@ -36,27 +36,27 @@ class PluginInstaller:
                 f"gs-{plugin_lower}-" in jar_name or 
                 f"geoserver-{plugin_lower}-" in jar_name or
                 f"{plugin_lower}-" in jar_name):
-                print(f"✅ {plugin} appears to be installed (found {jar_file.name})")
+                print(f"{plugin} appears to be installed (found {jar_file.name})")
                 return True
                 
         return False
 
     def install(self, plugin: str, url: str) -> None:
         if self.is_installed(plugin):
-            print(f"✅ {plugin} already installed")
+            print(f"{plugin} already installed")
             return
 
         zip_name = url.split("/")[-1]
-        # SourceForge URL'lerinde /download kısmını temizle
+        # SourceForge download URLs end with /download; use the zip segment.
         if zip_name == "download":
             zip_name = url.split("/")[-2]
         
         zip_path = self.tmp_dir / zip_name
 
-        print(f"⬇️  Downloading {plugin} from {url}")
+        print(f"Downloading {plugin} from {url}")
         self._download(url, zip_path)
 
-        print(f"📦  Extracting {zip_name}")
+        print(f"Extracting {zip_name}")
         self._extract(zip_path)
 
     def install_many(self, plugins: Iterable[str], url_fn) -> None:

@@ -1,18 +1,21 @@
 # -----------------------------
 # Base Tomcat
 # -----------------------------
-ARG IMAGE_VERSION=9.0.106-jdk11-temurin-jammy
+# GeoServer 2.28.3 requires Java 17 or Java 21.
+ARG IMAGE_VERSION=9.0.106-jdk17-temurin-jammy
 FROM tomcat:${IMAGE_VERSION}
 LABEL maintainer="orttak"
 
 # -----------------------------
 # Build-time args (IMAGE IDENTITY)
 # -----------------------------
-ARG GEOSERVER_VERSION=2.27.2
+ARG GEOSERVER_VERSION=2.28.3
 ARG JAVA_OPTS="-Xms512m -Xmx1024m"
 # Build-time defaults
 ARG DEFAULT_OFFICIAL_PLUGINS="gdal,monitor,vectortiles,mbstyle"
-ARG DEFAULT_COMMUNITY_PLUGINS="jdbcconfig,jdbcstore,sec-oauth2-openid-connect"
+ARG DEFAULT_COMMUNITY_PLUGINS="sec-oidc"
+ARG DEFAULT_JDBC_COMMUNITY_PLUGINS="jdbcconfig,jdbcstore"
+ARG BUILD_JDBC_PLUGINS=false
 
 # -----------------------------
 # Runtime ENV 
@@ -37,8 +40,10 @@ ENV JAVA_OPTS=${JAVA_OPTS}
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y \
-    curl wget unzip procps \
+    ca-certificates curl wget unzip procps \
+    postgresql-client \
     python3 python3-pip \
+    gdal-bin libgdal30 \
     gettext-base \
     && rm -rf /var/lib/apt/lists/*
 
@@ -70,14 +75,22 @@ COPY plugin_manager /opt/geoserver/plugin_manager
 # -----------------------------
 # Install base plugins at BUILD TIME
 # -----------------------------
-RUN python3 /opt/geoserver/plugin_manager/cli.py \
+RUN COMMUNITY_PLUGINS_TO_INSTALL="${DEFAULT_COMMUNITY_PLUGINS}" && \
+    if [ "${BUILD_JDBC_PLUGINS}" = "true" ]; then \
+        COMMUNITY_PLUGINS_TO_INSTALL="${COMMUNITY_PLUGINS_TO_INSTALL},${DEFAULT_JDBC_COMMUNITY_PLUGINS}"; \
+    fi && \
+    python3 /opt/geoserver/plugin_manager/cli.py \
     --version "${GEOSERVER_VERSION}" \
     --official "${DEFAULT_OFFICIAL_PLUGINS}" \
-    --community "${DEFAULT_COMMUNITY_PLUGINS}" && \
+    --community "${COMMUNITY_PLUGINS_TO_INSTALL}" && \
     echo "Base plugins installed successfully"
 
 # Store what plugins are actually baked into the image
-RUN echo "${GEOSERVER_VERSION}|${DEFAULT_OFFICIAL_PLUGINS}|${DEFAULT_COMMUNITY_PLUGINS}" \
+RUN COMMUNITY_PLUGINS_TO_INSTALL="${DEFAULT_COMMUNITY_PLUGINS}" && \
+    if [ "${BUILD_JDBC_PLUGINS}" = "true" ]; then \
+        COMMUNITY_PLUGINS_TO_INSTALL="${COMMUNITY_PLUGINS_TO_INSTALL},${DEFAULT_JDBC_COMMUNITY_PLUGINS}"; \
+    fi && \
+    echo "${GEOSERVER_VERSION}|${DEFAULT_OFFICIAL_PLUGINS}|${COMMUNITY_PLUGINS_TO_INSTALL}" \
     > /opt/geoserver/.image_plugins
 
 # -----------------------------
@@ -85,6 +98,7 @@ RUN echo "${GEOSERVER_VERSION}|${DEFAULT_OFFICIAL_PLUGINS}|${DEFAULT_COMMUNITY_P
 # -----------------------------
 COPY scripts /scripts
 RUN chmod +x /scripts/*.sh
+COPY docker/geoserver-init /geoserver-init
 
 # -----------------------------
 # Volumes

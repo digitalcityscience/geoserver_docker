@@ -1,5 +1,51 @@
 # Production-Grade GeoServer Setup (PostgreSQL / JDBC)
 
+Current implementation status:
+
+- `default` mode is the recommended production path while JDBC modes are introduced incrementally.
+- `jdbc-role` is implemented first and keeps users/groups file-backed while roles are stored in PostgreSQL.
+- `jdbc-auth-role` is available after `jdbc-role` and stores users/groups plus roles in PostgreSQL.
+- `jdbc-config` is an advanced explicit mode for catalog/config persistence and should not be enabled as the default production path.
+
+To start the implemented JDBC role mode:
+
+```bash
+GEOSERVER_SECURITY_MODE=jdbc-role \
+GEOSERVER_ENABLE_JDBC_ROLE=true \
+docker-compose --env-file .env.dev -f docker-compose-dev.yml up -d --build db geoserver
+```
+
+Validate it from inside the GeoServer container:
+
+```bash
+docker-compose --env-file .env.dev -f docker-compose-dev.yml exec geoserver \
+  python3 /scripts/geoserver_validate_jdbc.py
+```
+
+To start JDBC auth + role mode:
+
+```bash
+GEOSERVER_SECURITY_MODE=jdbc-auth-role \
+GEOSERVER_ENABLE_JDBC_ROLE=true \
+GEOSERVER_ENABLE_JDBC_AUTH=true \
+docker-compose --env-file .env.dev -f docker-compose-dev.yml up -d --build db geoserver
+```
+
+To start advanced JDBCConfig mode:
+
+```bash
+GEOSERVER_SECURITY_MODE=jdbc-config \
+GEOSERVER_ENABLE_JDBC_CONFIG=true \
+ENABLE_JDBC_CONFIG=true \
+COMMUNITY_PLUGINS=sec-oidc,jdbcconfig \
+docker-compose --env-file .env.dev -f docker-compose-dev.yml up -d --build db geoserver
+```
+
+Use `PG_SCHEMA_JDBCCONF` for JDBCConfig data and keep it separate from `PG_SCHEMA_GEOSERVER`.
+In this mode, `global.xml` may no longer be the authoritative source for all settings; proxy settings are applied through REST after startup.
+
+The older all-in-one manual procedure below is kept as historical guidance for full JDBC security/config work. Prefer the explicit mode flags above for the implemented `jdbc-role` and `jdbc-auth-role` paths.
+
 This setup replaces GeoServer’s default XML-based security and configuration with a PostgreSQL-backed (JDBC) system.
 
 Result:
@@ -21,7 +67,13 @@ This script prepares JDBC security and config services.
 **Linux / macOS**
 
 > chmod +x ./scripts/activate_jdbcS_settings.sh
-> ./scripts/activate_jdbcS_settings.sh
+> ENV_FILE=.env.prod ./scripts/activate_jdbcS_settings.sh
+
+If you want development values instead:
+
+> ENV_FILE=.env.dev ./scripts/activate_jdbcS_settings.sh
+
+> Important: Do not use `$ENV_FILE=.env.prod` (with `$` at the beginning). Use `ENV_FILE=.env.prod`.
 
 **Windows**
 

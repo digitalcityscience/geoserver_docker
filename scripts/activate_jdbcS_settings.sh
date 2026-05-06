@@ -28,7 +28,7 @@ set +a
 ############################################
 # CONFIG
 ############################################
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose-dev.yml}"
 HOST_INIT_DIR="${HOST_INIT_DIR:-./docker/geoserver-init}"
 GS_SECURITY_DIR="${GS_SECURITY_DIR:-/geoserver_data/data/security}"
 GS_URL="${GS_URL:-http://localhost:8080/geoserver}"
