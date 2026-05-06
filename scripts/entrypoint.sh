@@ -46,15 +46,54 @@ else
 fi
 
 # -------------------------------------------------------------------
-# 4) proxyBaseUrl (global.xml) - only if file exists
+# 4) proxyBaseUrl — patch global.xml if it exists (subsequent boots),
+#    or wait for GeoServer REST API after startup (first boot).
 # -------------------------------------------------------------------
+# _set_proxy_via_rest: Tomcat başladıktan sonra REST API ile proxyBaseUrl set eder.
+# jdbcconfig aktifken global.xml hiç oluşmaz; her boot'ta REST gereklidir.
+_set_proxy_via_rest() {
+  local GS_URL="http://localhost:8080/geoserver"
+  local GS_USER="${GEOSERVER_ADMIN_USER:-admin}"
+  local GS_PASS="${GEOSERVER_ADMIN_PASSWORD:-geoserver}"
+  local MAX_WAIT=180
+  local WAITED=0
+  echo "⏳ Waiting for GeoServer REST API..."
+  until curl -sf -u "${GS_USER}:${GS_PASS}" "${GS_URL}/rest/about/version.json" > /dev/null 2>&1; do
+    sleep 5
+    WAITED=$((WAITED+5))
+    if [ $WAITED -ge $MAX_WAIT ]; then
+      echo "⚠️  Timeout — proxyBaseUrl NOT set via REST"
+      return 1
+    fi
+  done
+  echo "🔗 Setting proxyBaseUrl via REST → ${PROXY_BASE_URL}"
+  curl -sf -u "${GS_USER}:${GS_PASS}" \
+    -XPUT -H "Content-Type: application/json" \
+    "${GS_URL}/rest/settings" \
+    -d "{\"global\":{\"settings\":{\"proxyBaseUrl\":\"${PROXY_BASE_URL}\"}}}" \
+    && echo "✅ proxyBaseUrl set via REST API" \
+    || echo "⚠️  REST API call failed — check GEOSERVER_ADMIN_PASSWORD"
+}
+
+# jdbcconfig aktifken global.xml oluşmaz → her zaman REST yolunu kullan.
+# global.xml varsa (jdbcconfig kapalı) sed ile de patch'le (fallback).
+PROXY_NEEDS_REST=false
 if [ -n "${PROXY_BASE_URL:-}" ]; then
   GLOBAL_XML="${GEOSERVER_DATA_DIR}/global.xml"
   if [ -f "$GLOBAL_XML" ]; then
-    echo "🔗 Setting proxyBaseUrl to $PROXY_BASE_URL"
-    sed -i "s|<proxyBaseUrl>.*</proxyBaseUrl>|<proxyBaseUrl>${PROXY_BASE_URL}</proxyBaseUrl>|" "$GLOBAL_XML" || true
-  else
-    echo "ℹ️  global.xml not found yet (first boot) → skipping proxyBaseUrl patch"
+    echo "🔗 Patching proxyBaseUrl in global.xml → $PROXY_BASE_URL"
+    sed -i \
+      -e "s|<proxyBaseUrl>.*</proxyBaseUrl>|<proxyBaseUrl>${PROXY_BASE_URL}</proxyBaseUrl>|g" \
+      -e "s|<proxyBaseUrl/>|<proxyBaseUrl>${PROXY_BASE_URL}</proxyBaseUrl>|g" \
+      "$GLOBAL_XML"
+  fi
+  # jdbcconfig varsa config DB'de → REST ile de set et (global.xml olsa bile zarar vermez)
+  if [ -d "${GEOSERVER_DATA_DIR}/jdbcconfig" ]; then
+    echo "ℹ️  jdbcconfig detected → proxyBaseUrl will be set via REST after startup"
+    PROXY_NEEDS_REST=true
+  elif [ ! -f "$GLOBAL_XML" ]; then
+    echo "ℹ️  global.xml not found → proxyBaseUrl will be set via REST after startup"
+    PROXY_NEEDS_REST=true
   fi
 fi
 
@@ -104,7 +143,17 @@ else
   fi
 fi
 # -------------------------------------------------------------------
-# 5) Start Tomcat (PID 1)
+# 5) Start Tomcat
 # -------------------------------------------------------------------
 echo "Starting Tomcat..."
-exec catalina.sh run
+
+if [ "$PROXY_NEEDS_REST" = "true" ]; then
+  # Start Tomcat in background, set proxy after GeoServer is ready, then wait (keeps container alive)
+  catalina.sh run &
+  TOMCAT_PID=$!
+  _set_proxy_via_rest
+  wait $TOMCAT_PID
+else
+  # Normal path: exec makes Tomcat PID 1
+  exec catalina.sh run
+fi
