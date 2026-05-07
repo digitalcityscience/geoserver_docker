@@ -1,272 +1,252 @@
-# GeoServer Docker (Mode-First, Production-Ready)
+# GeoServer Docker 
 
-This directory contains the refactored GeoServer Docker setup used by TOSCA Backend.
+> 🎯 **In one sentence:**  
+> Run GeoServer 2.28.3 in Docker. Works out of the box. Add PostgreSQL later if you need it.
 
-The default deployment path is **file-backed GeoServer** (`GEOSERVER_SECURITY_MODE=default`) with hardened runtime validation, proxy handling, and admin bootstrap.
+---
 
-JDBC-based security/config is available as explicit opt-in modes.
+## 🚀 Get Started in 3 Minutes
 
-## What This Setup Provides
-
-- GeoServer `2.28.3` on Tomcat JDK 17
-- Deterministic startup pipeline in `scripts/entrypoint.sh`
-- Environment-driven CORS, CSRF, proxy, and credentials
-- Mode-aware runtime validation before startup
-- Optional JDBC modes for security and config
-- Two explicit compose targets only:
-  - `docker-compose-dev.yml`
-  - `docker-compose-prod.yml`
-
-## Runtime Modes
-
-Use `GEOSERVER_SECURITY_MODE` to select behavior.
-
-| Mode | Purpose | DB Required | Default |
-| --- | --- | --- | --- |
-| `default` | File-backed GeoServer config/security | No | Yes |
-| `jdbc-role` | JDBC role service only (users stay file-backed) | Yes | No |
-| `jdbc-auth-role` | JDBC user/group + JDBC role services | Yes | No |
-| `jdbc-config` | JDBC config/catalog backend (advanced) | Yes | No |
-
-Mode flags are validated by `scripts/geoserver_validate_runtime.py`.
-
-## Quick Start
-
-### 1) Development (default mode)
-
+### For Development
 ```bash
-cp env_dev_sample .env.dev
-docker compose -f docker-compose-dev.yml --env-file .env.dev up -d --build geoserver
-```
+# 1. Clone the repo
+git clone <your-repo-url> && cd geoserver-docker
 
-Makefile equivalent:
-
-```bash
+# 2. Create your dev environment file
 make init-dev
-make up ENV=dev
+
+# 3. Start GeoServer
+make up
 ```
 
-GeoServer UI:
+✅ **You're done!**  
+🌐 Open: http://localhost:8080/geoserver  
+🔐 Login: `admin` / `geoserver`
 
-```text
-http://localhost:${GEOSERVER_HOST_PORT}/geoserver
-```
-
-### 2) Production (default mode)
-
+### For Production
 ```bash
-cp env_prod_sample .env.prod
-# edit .env.prod values for your server/domain/passwords
+# 1. Create your prod environment file
+make init-prod
 
-docker compose -f docker-compose-prod.yml --env-file .env.prod up -d --build geoserver
-```
+# 2. EDIT .env.prod – set strong passwords and your domain
+vim .env.prod
 
-Makefile equivalent:
-
-```bash
-make init-prod ENV=prod
+# 3. Run safety checks (mandatory)
 make validate ENV=prod
+
+# 4. Start
 make up ENV=prod
 ```
 
-Production pre-check:
+---
 
+## 🎮 Makefile Cheat Sheet
+
+> 💡 `ENV` defaults to `dev`. You can skip it for local work.
+
+### Everyday Commands
 ```bash
-set -a && source .env.prod && set +a
-./scripts/check_prod_env.sh
+make up                     # Start GeoServer (dev)
+make up ENV=prod            # Start GeoServer (production)
+make up-all                 # Start GeoServer + PostgreSQL (dev)
+make down                   # Stop containers
+make restart                # Restart everything
+make logs-follow            # Watch logs in real-time (Ctrl+C to stop)
+make health                 # Quick "is it alive?" check
 ```
 
-## Environment Model
-
-This project is controlled by `.env.dev` and `.env.prod`.
-
-Main sections in env files:
-
-1. Global: `COMPOSE_PROJECT_NAME`, `ENV`, `PROD_MODE`
-2. Core: GeoServer version/ports/data dir/mode
-3. Admin bootstrap: `GEOSERVER_ADMIN_USER`, `GEOSERVER_ADMIN_PASSWORD`
-4. URLs/proxy: internal URL vs public URL vs proxy base URL
-5. CORS/CSRF hardening
-6. Plugins
-7. PostgreSQL ports and users
-8. Optional JDBC flags
-
-Canonical ports:
-
-- `GEOSERVER_HOST_PORT`
-- `GEOSERVER_CONTAINER_PORT`
-- `POSTGRES_HOST_PORT`
-- `POSTGRES_CONTAINER_PORT`
-
-Backward-compatible aliases (`PG_PORT`, `PG_DOCKER_PORT`, `ENABLE_JDBC_*`) remain for compatibility with existing JDBC templates/scripts.
-
-## Startup and Validation Flow
-
-Container startup is orchestrated by `scripts/entrypoint.sh`:
-
-1. Validate runtime env (`geoserver_validate_runtime.py`)
-2. Ensure writable `GEOSERVER_DATA_DIR`
-3. Inject CORS filter in `web.xml` (idempotent)
-4. Start Tomcat
-5. Wait for web + REST readiness (`geoserver_wait_ready.sh`)
-6. Wait for core first-boot files
-7. Apply admin credentials (`geoserver_set_admin_credentials.py`)
-8. Apply JDBC security/config only when enabled
-9. Apply/validate proxy settings when `PROXY_BASE_URL` is set
-10. Keep Tomcat as foreground process
-
-## Reverse Proxy Rules
-
-Use three distinct URL variables:
-
-- `GEOSERVER_INTERNAL_URL`: only for internal bootstrap/REST checks
-- `GEOSERVER_PUBLIC_URL`: user-facing external URL
-- `PROXY_BASE_URL`: GeoServer proxyBaseUrl (usually same as public URL)
-
-For production, configure forwarded headers in your reverse proxy:
-
-- `X-Forwarded-Proto`
-- `X-Forwarded-Host`
-- `X-Forwarded-Port`
-- `X-Forwarded-Prefix` (if path-prefix proxying is used)
-
-See `docs/reverse_proxy.md` for details.
-
-## Plugins
-
-Default baked plugin sets:
-
-- Official: `gdal,monitor,vectortiles,mbstyle`
-- Community: `sec-oidc`
-
-JDBC community modules are optional and mode-dependent:
-
-- `jdbcconfig`
-- `jdbcstore`
-
-Build-time toggle:
-
-```text
-BUILD_JDBC_PLUGINS=false
+### When You Change Code or Config
+```bash
+make rebuild                # Rebuild image + restart GeoServer
+make rebuild ENV=prod       # Same, for production
 ```
 
-Runtime plugin lists are read from env (`OFFICIAL_PLUGINS`, `COMMUNITY_PLUGINS`).
-
-## JDBC Modes (Advanced)
-
-Use JDBC modes only when you need PostgreSQL-backed security/config.
-
-Full operational guide:
-
-- `readme_jdbc.md`
-- `docs/jdbc_security.md`
-- `docs/geoserver_modes.md`
-
-### Minimal mode examples
-
-`jdbc-role`:
-
+### Debugging & Inspection
 ```bash
-GEOSERVER_SECURITY_MODE=jdbc-role \
-GEOSERVER_ENABLE_JDBC_ROLE=true \
-docker compose -f docker-compose-dev.yml --env-file .env.dev up -d --build db geoserver
+make ps                     # See what's running
+make logs                   # Show last 100 log lines
+make shell-geoserver        # Open terminal inside GeoServer container
+make shell-db               # Open terminal inside PostgreSQL container
+make verify                 # Run internal validation checks
 ```
 
-`jdbc-auth-role`:
-
+### Cleanup ⚠️
 ```bash
-GEOSERVER_SECURITY_MODE=jdbc-auth-role \
-GEOSERVER_ENABLE_JDBC_ROLE=true \
-GEOSERVER_ENABLE_JDBC_AUTH=true \
-docker compose -f docker-compose-dev.yml --env-file .env.dev up -d --build db geoserver
+make clean                  # Remove containers, networks, volumes (DATA LOSS)
+make rmVolumes              # Remove volumes only (asks for confirmation)
 ```
 
-`jdbc-config`:
-
+### Help
 ```bash
-GEOSERVER_SECURITY_MODE=jdbc-config \
-GEOSERVER_ENABLE_JDBC_CONFIG=true \
-COMMUNITY_PLUGINS=sec-oidc,jdbcconfig \
-docker compose -f docker-compose-dev.yml --env-file .env.dev up -d --build db geoserver
+make help                   # Show all commands
+make which-env              # See which .env and compose files are loaded
 ```
 
-Validate JDBC mode from container:
+---
+
+## ⚙️ Only 5 Settings You Need to Change
+
+Open `.env.dev` or `.env.prod` and edit these:
+
+| Variable | Example | What it does |
+|----------|---------|-------------|
+| `GEOSERVER_ADMIN_PASSWORD` | `MySecurePass!2024` | Sets the admin password (change this!) |
+| `GEOSERVER_PUBLIC_URL` | `https://maps.yourcompany.com/geoserver` | The URL users see in their browser |
+| `PROXY_BASE_URL` | `https://maps.yourcompany.com/geoserver` | Base URL for all generated links (WMS, REST, etc.) |
+| `GEOSERVER_CORS_ALLOWED_ORIGINS` | `https://app.yourcompany.com` | Which websites can call your GeoServer API |
+| `GEOSERVER_SECURITY_MODE` | `default` | How GeoServer stores config (`default`, `jdbc-role`, etc.) |
+
+> ✅ All other settings have safe defaults. Leave them alone until you need them.
+
+---
+
+## 🔄 Runtime Modes – Pick One
+
+Set `GEOSERVER_SECURITY_MODE` in your `.env` file.
+
+| Mode | Where settings are stored | Needs PostgreSQL? | Use this when… |
+|------|--------------------------|-------------------|----------------|
+| `default` ⭐ | Simple files (XML) | ❌ No | **Start here.** Works for 90% of cases. |
+| `jdbc-role` | Roles in DB, users in files | ✅ Yes | You want to manage roles from PostgreSQL. |
+| `jdbc-auth-role` | Users + Roles in DB | ✅ Yes | You want full user management from PostgreSQL. |
+| `jdbc-config` | Everything in DB | ✅ Yes | Advanced use only. You know what you're doing. |
+
+> 🚦 **Golden Rule:** Always start with `default`. Get it working. Then switch modes if you truly need to.
+
+---
+
+### 🔁 How to Switch Modes 
 
 ```bash
-docker compose -f docker-compose-dev.yml --env-file .env.dev exec geoserver \
-  python3 /scripts/geoserver_validate_jdbc.py
-```
+# 1. Edit your .env file
+GEOSERVER_SECURITY_MODE=jdbc-role
+GEOSERVER_ENABLE_JDBC_ROLE=true
 
-## Makefile Shortcuts
-
-Daily usage:
-
-```bash
-make help
-make up ENV=dev
-make up ENV=prod
-make logs ENV=prod
-make down ENV=prod
-```
-
-Default service for `make up` is `geoserver`.
-
-To include DB explicitly:
-
-```bash
+# 2. Rebuild and start with database
 make up-all ENV=dev
-# or
-make up ENV=dev SERVICE="db geoserver"
+
+# 3. Verify the mode is active
+make verify-jdbc ENV=dev
 ```
 
-Useful operational targets:
+> 💡 **Tip:** Use `make up-all` (not just `up`) when enabling any JDBC mode, because PostgreSQL must be running.
+
+---
+
+### 📋 Mode-Specific Environment Variables
+
+| Mode | Required `.env` settings |
+|------|-------------------------|
+| `jdbc-role` | `GEOSERVER_ENABLE_JDBC_ROLE=true` + `GEOSERVER_JDBC_ROLE_AUTO_ACTIVATE=false` (recommended) |
+| `jdbc-auth-role` | `GEOSERVER_ENABLE_JDBC_ROLE=true` + `GEOSERVER_ENABLE_JDBC_AUTH=true` |
+| `jdbc-config` | `GEOSERVER_ENABLE_JDBC_CONFIG=true` + `COMMUNITY_PLUGINS=sec-oidc,jdbcconfig` |
+
+> ⚠️ **Important for `jdbc-config`:** This mode also requires `BUILD_JDBC_PLUGINS=true` in your Dockerfile build args, otherwise the required plugins won't be available at runtime.
+
+> ℹ️ **Important for `jdbc-role`:** Startup now prepares JDBC role files/tables by default and keeps file-based login active. Complete activation with `ENV_FILE=.env.prod ./scripts/activate_jdbcS_settings.sh` and GeoServer UI steps. Set `GEOSERVER_JDBC_ROLE_AUTO_ACTIVATE=true` only if you explicitly want automatic switch-over at startup.
+
+---
+
+### 🔄 Switching Back to `default` Mode
 
 ```bash
-make ps ENV=prod
-make stop ENV=prod
-make start ENV=prod
-make shell-geoserver ENV=prod
-make shell-db ENV=prod
-make clean ENV=dev
+# 1. Edit your .env file
+GEOSERVER_SECURITY_MODE=default
+GEOSERVER_ENABLE_JDBC_ROLE=false
+GEOSERVER_ENABLE_JDBC_AUTH=false
+GEOSERVER_ENABLE_JDBC_CONFIG=false
+
+# 2. Rebuild and restart (without DB dependency)
+make rebuild ENV=dev
 ```
 
-## Production Checklist
+> ℹ️ Your file-based config (`global.xml`, `users.xml`, etc.) will be used again. JDBC-backed data remains in PostgreSQL but is ignored until you re-enable the mode.
 
-Before first production boot:
+---
 
-- Set non-placeholder strong passwords in `.env.prod`
-- Keep `GEOSERVER_ADMIN_PASSWORD` different from `geoserver`
-- Set `GEOSERVER_PUBLIC_URL` and `PROXY_BASE_URL`
-- Keep `GEOSERVER_INTERNAL_URL` internal (not public URL)
-- Ensure `GEOSERVER_CSRF_WHITELIST` includes public GeoServer host
-- Keep wildcard CORS disabled unless explicitly required
+### 📚 Need More Detail?
 
-Validation commands:
+For complete JDBC setup instructions, UI activation steps, schema design, and troubleshooting:
 
+👉 **See [`readme_jdbc.md`](./readme_jdbc.md)**
+
+That guide covers:
+- ✅ Step-by-step UI activation (mandatory for JDBC modes)
+- ✅ Dual-schema architecture (`gs_auth_role_schema` vs `gs_jdbcconfig_schema`)
+- ✅ Database table reference and integration patterns
+- ✅ Keycloak/OIDC integration prerequisites
+
+---
+
+> 🎯 **Quick Decision Helper:**  
+> - Just testing or running a simple instance? → **Stay on `default`**  
+> - Need to sync roles across multiple GeoServer instances? → **Try `jdbc-role`**  
+> - Building a multi-tenant SaaS with centralized user management? → **Consider `jdbc-auth-role`**  
+> - Need full config-as-code with database versioning? → **Read `readme_jdbc.md` first, then evaluate `jdbc-config`**```
+
+---
+
+## ⚠️ PRODUCTION CHECKLIST – DO NOT SKIP
+
+Before you deploy to production (`ENV=prod`), verify **every item below**:
+
+### 🔐 Security
+- [ ] `GEOSERVER_ADMIN_PASSWORD` is **NOT** `geoserver` (use a strong, unique password)
+- [ ] `GEOSERVER_CORS_ALLOWED_ORIGINS` does **NOT** contain `*` (list exact domains only)
+- [ ] `GEOSERVER_CSRF_WHITELIST` includes your public domain
+- [ ] `.env.prod` is **NOT** committed to Git (check `.gitignore`)
+
+### 🌐 Networking & Proxy
+- [ ] `GEOSERVER_PUBLIC_URL` and `PROXY_BASE_URL` use `https://` and your real domain
+- [ ] Your reverse proxy (Nginx, Traefik, etc.) forwards these headers:
+  - `X-Forwarded-Proto`
+  - `X-Forwarded-Host`
+  - `X-Forwarded-Port`
+- [ ] You have tested login and map requests **through the proxy**, not just localhost
+
+### 🗄️ Data & Persistence
+- [ ] You have a backup strategy for the `geoserver-data` Docker volume
+- [ ] You know how to restore from backup (test this in staging first)
+- [ ] PostgreSQL (if using JDBC) has its own backup schedule
+
+### ✅ Validation
 ```bash
-set -a && source .env.prod && set +a
-./scripts/check_prod_env.sh
-docker compose -f docker-compose-prod.yml --env-file .env.prod exec geoserver \
-  python3 /scripts/geoserver_validate_runtime.py
+# Run this before every production deploy:
+make validate ENV=prod
+
+# After startup, verify inside the container:
+make verify ENV=prod
 ```
 
-## Troubleshooting
+> ❗ If any check fails, **do not proceed**. Fix the issue first.
 
-- GeoServer not reachable:
-  - Check container logs and `GEOSERVER_HOST_PORT` mapping.
-- Runtime validation fails:
-  - Fix mode/flag mismatch (`GEOSERVER_SECURITY_MODE` vs `GEOSERVER_ENABLE_*`).
-- Proxy links are wrong:
-  - Re-check `GEOSERVER_PUBLIC_URL`, `PROXY_BASE_URL`, and forwarded headers.
-- Production validation fails:
-  - Run `set -a && source .env.prod && set +a && ./scripts/check_prod_env.sh` and resolve the reported variable.
-- JDBC mode fails:
-  - Confirm DB is running, schemas exist, and JDBC flags/plugins match mode requirements.
+---
 
-## Additional Docs
+## 🐛 Quick Troubleshooting
 
-- `docs/geoserver_modes.md`
-- `docs/reverse_proxy.md`
-- `docs/jdbc_security.md`
-- `readme_jdbc.md`
-- `readme_keycloak.md`
+| Problem | Likely Cause | One-Line Fix |
+|---------|-------------|--------------|
+| Can't login, password rejected | First boot didn't apply new password | Check logs: `make logs-follow` |
+| Browser shows "Mixed Content" warning | Login form uses `http` on `https` site | Ensure proxy sends `X-Forwarded-Proto: https` |
+| CORS error in browser console | `GEOSERVER_CORS_ALLOWED_ORIGINS` doesn't match your frontend | Add exact origin: `https://app.yourcompany.com` |
+| JDBC mode won't connect | PostgreSQL not ready or wrong credentials | Use `make up-all` to start DB + GeoServer together |
+| Startup is very slow first time | Plugins downloading at runtime | Set `BUILD_JDBC_PLUGINS=true` in Dockerfile to bake them in |
+| "Permission denied" on data directory | Volume mounted with wrong user | Ensure volume is writable by UID 1000 (Tomcat) |
+
+### Quick Diagnostic Commands
+```bash
+make health                     # Is GeoServer responding?
+make logs                       # What did it say on startup?
+make verify                     # Are runtime settings valid?
+make shell-geoserver            # Debug inside the container
+```
+
+---
+
+
+---
+
+> ℹ️ **Stack:** GeoServer 2.28.3 • Tomcat 9 • JDK 17 • Docker  
+> 🔄 **Last Updated:** May 2026  
+> 🛠️ **Managed via Makefile** – run `make help` for quick reference  
+> 📄 **License:** MIT – use, modify, and deploy freely

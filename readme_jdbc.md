@@ -1,239 +1,337 @@
-# Production-Grade GeoServer Setup (PostgreSQL / JDBC)
+# GeoServer JDBC Setup – Critical User Guide
 
-Current implementation status:
-
-- `default` mode is the recommended production path while JDBC modes are introduced incrementally.
-- `jdbc-role` is implemented first and keeps users/groups file-backed while roles are stored in PostgreSQL.
-- `jdbc-auth-role` is available after `jdbc-role` and stores users/groups plus roles in PostgreSQL.
-- `jdbc-config` is an advanced explicit mode for catalog/config persistence and should not be enabled as the default production path.
-
-To start the implemented JDBC role mode:
-
-```bash
-GEOSERVER_SECURITY_MODE=jdbc-role \
-GEOSERVER_ENABLE_JDBC_ROLE=true \
-docker-compose --env-file .env.dev -f docker-compose-dev.yml up -d --build db geoserver
-```
-
-Validate it from inside the GeoServer container:
-
-```bash
-docker-compose --env-file .env.dev -f docker-compose-dev.yml exec geoserver \
-  python3 /scripts/geoserver_validate_jdbc.py
-```
-
-To start JDBC auth + role mode:
-
-```bash
-GEOSERVER_SECURITY_MODE=jdbc-auth-role \
-GEOSERVER_ENABLE_JDBC_ROLE=true \
-GEOSERVER_ENABLE_JDBC_AUTH=true \
-docker-compose --env-file .env.dev -f docker-compose-dev.yml up -d --build db geoserver
-```
-
-To start advanced JDBCConfig mode:
-
-```bash
-GEOSERVER_SECURITY_MODE=jdbc-config \
-GEOSERVER_ENABLE_JDBC_CONFIG=true \
-ENABLE_JDBC_CONFIG=true \
-COMMUNITY_PLUGINS=sec-oidc,jdbcconfig \
-docker-compose --env-file .env.dev -f docker-compose-dev.yml up -d --build db geoserver
-```
-
-Use `PG_SCHEMA_JDBCCONF` for JDBCConfig data and keep it separate from `PG_SCHEMA_GEOSERVER`.
-In this mode, `global.xml` may no longer be the authoritative source for all settings; proxy settings are applied through REST after startup.
-
-The older all-in-one manual procedure below is kept as historical guidance for full JDBC security/config work. Prefer the explicit mode flags above for the implemented `jdbc-role` and `jdbc-auth-role` paths.
-
-This setup replaces GeoServer’s default XML-based security and configuration with a PostgreSQL-backed (JDBC) system.
-
-Result:
-• Users, roles, and config are stored in PostgreSQL
-• Settings survive container restarts
-• XML-based security is fully disabled
-• Ready for Keycloak / OIDC integration
-
-## UI Activation Procedure
-
-> **Note**: Despite correct backend configuration, GeoServer requires explicit UI activation. This is a mandatory step, not an optional convenience.
-
-### Step 0 : Run Script
-
-This script prepares JDBC security and config services.
-
-##### Before running, ensure GeoServer containers are up. Please go to Geoserver URL (e.g. http://localhost:8080/geoserver) and confirm it is running.
-
-**Linux / macOS**
-
-> chmod +x ./scripts/activate_jdbcS_settings.sh
-> ENV_FILE=.env.prod ./scripts/activate_jdbcS_settings.sh
-
-If you want development values instead:
-
-> ENV_FILE=.env.dev ./scripts/activate_jdbcS_settings.sh
-
-> Important: Do not use `$ENV_FILE=.env.prod` (with `$` at the beginning). Use `ENV_FILE=.env.prod`.
-
-**Windows**
-
-Use Git Bash or WSL:
-
-> bash ./scripts/activate_jdbcS_settings.sh
-
-### Step 1: Activate JDBC Login Service
-
-1. Navigate to: **Security → User Group Services → jdbc_login**
-2. Select the **Settings** tab
-3. **Critical UI Behavior Note**: The _Driver Class Name_ field may initially appear empty
-   - This is expected behavior due to GeoServer's lazy initialization
-   - **Resolution**: Click the **Users** tab, then return to **Settings**
-   - The driver class should now auto-populate
-4. Click **Test Connection**
-   - ✅ **Expected Result**: Green success message confirming database connectivity
-5. Click **Save**
-   - ⚠️ **Warning**: Test Connection alone is insufficient; Save action commits configuration
-
-### Step 2: Activate JDBC Role Service
-
-1. Navigate to: **Security → Role Services → jdbc_role**
-2. Verify _Driver Class Name_ is populated (typically appears immediately)
-3. Click **Test Connection**
-   - ❌ **If connection fails**:
-     - Navigate to any other GeoServer menu item
-     - Return to Role Services
-     - Retry Test Connection
-4. Upon successful connection (green message), click **Save**
-
-### Step 3: Configure Administrator Roles
-
-> **Critical Security Step**: XML-defined roles require explicit UI mapping.
-
-1. Remain in **Security → Role Services → jdbc_role**
-2. In the **Administrator Roles** section:
-   - Set **Administrator role** to: `ADMIN`
-   - Set **Group administrator role** to: `GROUP_ADMIN`
-3. Click **Save**
-4. **Validation**: Navigate away and return to verify selections persist
-
-### Step 4: Apply Configuration Changes
-
-1. After saving Role Services, a restart prompt will appear in the terminal.
-2. Press **y** to confirm restart
-3. Allow the GeoServer container to complete restart cycle
-
-> **Why restart is mandatory**: This reloads the security chain with JDBC-backed authentication providers and activates the configuration persistence layer.
-
-⸻
-
-1. Result
-   • Credentials defined in .env are now stored in PostgreSQL
-   • XML-based security is disabled
-   • GeoServer runs fully JDBC-backed
-   • Keycloak / OIDC integration can now be added safely
-
-⸻
-
-⚠️ Important
-Do not edit JDBC tables manually.
-Use GeoServer UI or REST API only.
+> 🚨 **READ THIS FIRST**  
+> **Backend config alone is NOT enough.**  
+> Even with perfect `.env` settings and `make up-all`, JDBC **will not work** until you complete the **mandatory UI activation steps** below.  
+> This is a GeoServer limitation, not a bug in this setup.
 
 ---
 
-## Executive Summary
+## ⚠️ The One Thing You Cannot Skip
 
-This documentation describes a production-ready GeoServer configuration that leverages PostgreSQL as the persistent backend for **both security management and server configuration**. This architecture eliminates file-based dependencies, ensures configuration persistence across container restarts, and provides enterprise-grade reliability for cloud (AWS), on-premises, or Docker deployments.
+| Step | Command / Action | Why It's Mandatory |
+|------|-----------------|-----------------|
+| 1️⃣ Backend Config | `make up-all ENV=prod` | Starts GeoServer + PostgreSQL with JDBC flags |
+| 2️⃣ Prep Script | `ENV_FILE=.env.prod ./scripts/activate_jdbcS_settings.sh` | Creates JDBC service definitions in GeoServer config |
+| 3️⃣ UI Activation | Click through GeoServer Admin UI (detailed below) | **GeoServer requires manual confirmation to activate JDBC services** |
+| 4️⃣ Restart | Press `y` when prompted | Reloads security chain with new JDBC providers |
 
-> **Key Benefit**: Single source of truth in PostgreSQL replaces fragile file-based configurations, enabling true production resilience.
-
----
-
-## Architecture Overview
-
-### Dual-Schema Design Pattern
-
-This setup implements a strict separation of concerns using two dedicated PostgreSQL schemas:
-
-| Component                   | Schema Name            | Purpose                          | Data Types                                                 |
-| --------------------------- | ---------------------- | -------------------------------- | ---------------------------------------------------------- |
-| **Security Management**     | `gs_auth_role_schema`  | Authentication and authorization | Users, groups, roles, permissions, relationships           |
-| **GeoServer Configuration** | `gs_jdbcconfig_schema` | Server configuration persistence | Workspaces, datastores, layers, styles, services, settings |
-
-> **⚠️ Critical Design Principle**: These schemas **MUST** remain separate. Mixing security and configuration data creates lifecycle conflicts, security vulnerabilities, and maintenance complexity.
-
-### Why This Architecture Matters
-
-After successful implementation:
-
-- ✅ **No file-based dependencies**: All critical data resides in PostgreSQL
-- ✅ **Configuration persistence**: Container restarts preserve all settings
-- ✅ **Stateless containers**: GeoServer instances become truly ephemeral
-- ✅ **Enterprise scalability**: PostgreSQL handles concurrency and replication natively
-- ✅ **Disaster recovery**: Full system restoration via database backup/restore
+> ❗ **If you skip Step 2 or 3, JDBC will silently fail.**  
+> GeoServer will start, login will work, but roles/users will NOT be read from PostgreSQL. You will think it's broken, but you just missed the UI step.
 
 ---
 
-## Prerequisites Verification
+## ⚡ Quick Start: Enable JDBC (Complete Flow)
 
-Before proceeding with UI activation, confirm these foundational elements are in place:
+### Phase 1: Backend Setup (Makefile)
+```bash
+# 1. Edit your .env.prod file
+GEOSERVER_SECURITY_MODE=jdbc-role
+GEOSERVER_ENABLE_JDBC_ROLE=true
 
-```yaml
-Infrastructure Status:
-  ✓ PostgreSQL database accessible
-  ✓ Dedicated schemas created:
-      - gs_auth_role_schema (security)
-      - gs_jdbcconfig_schema (configuration)
-  ✓ GeoServer containers running
-  ✓ JDBC drivers deployed in GeoServer lib directory
-  ✓ Initial security services configured via startup scripts
-  ✓ File-based login services disabled
+# 2. Start GeoServer + PostgreSQL
+make up-all ENV=prod
+
+# 3. Wait for startup to complete (~30-60 seconds)
+make logs-follow ENV=prod
+# Look for: "GeoServer is ready" or similar
+
+# 4. Run the prep script (creates service definitions)
+ENV_FILE=.env.prod ./scripts/activate_jdbcS_settings.sh
 ```
 
-> 🔍 **Note**: The `./scripts/activate_jdbcS_settings.sh` script should have already set up the initial service definitions in GeoServer’s `security/` and `jdbcconfig/` directories. If not, run it **now**.
+✅ Backend is configured. **Now you MUST do the UI activation.**
 
 ---
 
-## Database Schema Reference
+### Phase 2: UI Activation (MANDATORY – Do Not Skip)
 
-### Security Schema (`gs_auth_role_schema`)
+> 🔐 Open GeoServer Admin UI: https://your-domain.com/geoserver  
+> 🔑 Login with your admin credentials
 
-**Primary Tables & Use Cases:**
+#### Step A: Activate JDBC Login Service
+1. Navigate: **Security → User Group Services → jdbc_login**
+2. Click tab: **Settings**
+3. ⚠️ **UI Quirk**: If "Driver Class Name" appears empty:
+   - Click tab: **Users**
+   - Return to tab: **Settings**
+   - Field should now auto-populate with `org.postgresql.Driver`
+4. Click button: **Test Connection**
+   - ✅ Expected: Green banner "Connection successful"
+   - ❌ If fails: Check `.env.prod` DB credentials, network, firewall
+5. Click button: **Save** ⚠️ *Test alone does NOT activate – you must Save*
 
-| Table         | Purpose                     | Common Operations                       |
-| ------------- | --------------------------- | --------------------------------------- |
-| `users`       | User credentials and status | Password resets, account enable/disable |
-| `roles`       | Role definitions            | Role creation/deletion                  |
-| `user_roles`  | User-role relationships     | Permission assignment                   |
-| `groups`      | User groups                 | Group management                        |
-| `group_roles` | Group-role mappings         | Bulk permission management              |
-| `user_props`  | Extended user metadata      | Integration with external IAM systems   |
+#### Step B: Activate JDBC Role Service
+1. Navigate: **Security → Role Services → jdbc_role**
+2. Verify "Driver Class Name" is populated
+3. Click: **Test Connection** → ✅ Green success
+4. Click: **Save**
 
-**Integration Points:**
+#### Step C: Map Administrator Roles (Critical Security Step)
+1. Stay on **Security → Role Services → jdbc_role**
+2. Scroll to **Administrator Roles** section
+3. Set exactly:
+   - **Administrator role**: `ADMIN`
+   - **Group administrator role**: `GROUP_ADMIN`
+4. Click: **Save**
+5. ✅ Verify: Navigate away, then return – settings must still show `ADMIN`/`GROUP_ADMIN`
 
-- External user provisioning systems (SCIM, LDAP sync)
-- Django/IAM system integrations
-- Security auditing and compliance reporting
-- Automated user lifecycle management
+#### Step D: Confirm Restart
+1. After saving Role Services, terminal will show:
+   ```
+   Configuration changed. Restart GeoServer? (y/n):
+   ```
+2. Type: `y` and press Enter
+3. Wait ~30 seconds for GeoServer to fully restart
+4. Verify: `make health ENV=prod` returns ✅
 
-### Configuration Schema (`gs_jdbcconfig_schema`)
+> 🔁 **Why restart is non-optional:** GeoServer loads security providers at startup. Without restart, it continues using the old file-based chain.
 
-**Core Tables(Views) & Use Cases:**
+---
 
-| Table                       | Purpose                    | Common Operations            |
-| --------------------------- | -------------------------- | ---------------------------- |
-| `workspace`                 | Workspace definitions      | Multi-tenant isolation       |
-| `datastore`/`coveragestore` | Data source configurations | Connection parameter updates |
-| `featuretype`/`coverage`    | Layer metadata             | Schema modifications         |
-| `layer`/`layergroup`        | Published layers           | Layer organization           |
-| `style`/`layer_style`       | Styling rules              | Style versioning             |
-| `service`/`settings`        | Service configurations     | Performance tuning           |
+## 🔍 How to Verify JDBC Is Actually Working
 
-**Operational Use Cases:**
+After completing all steps above, run these checks:
 
-- Automated backup/restore via SQL dumps
-- Configuration version control through database snapshots
-- CI/CD pipeline deployments using SQL scripts
-- Cross-environment configuration synchronization
-- Disaster recovery without manual file restoration
+```bash
+# 1. Health check
+make health ENV=prod
 
-> **⚠️ Critical Warning**: Manual table edits are **not recommended** except for emergency recovery. Always use GeoServer REST API or UI for configuration changes to maintain data integrity.
+# 2. Runtime validation
+make verify-jdbc ENV=prod
+
+# 3. Manual DB check (optional but recommended)
+make shell-db ENV=prod
+# Inside PostgreSQL container:
+psql -U geoserver -d geoserver -c "SELECT COUNT(*) FROM gs_auth_role_schema.roles;"
+# Should return a number > 0 if roles were seeded
+```
+
+### UI Verification
+1. Go to **Security → Users, Groups, Roles → Roles**
+2. You should see roles like `ADMIN`, `GROUP_ADMIN` listed
+3. Click a role → **Edit** → Check "Source" – it should say `jdbc_role` (not `default`)
+
+---
+
+## 🚨 What Happens If You Skip UI Activation?
+
+| Symptom | Root Cause | How to Fix |
+|---------|-----------|-----------|
+| Login works, but roles not applied | JDBC role service not activated | Go back and complete Phase 2 UI steps |
+| New users created in UI disappear after restart | User service still file-backed | Activate `jdbc_login` service via UI (Step A) |
+| `Test Connection` fails in UI | Prep script not run or DB unreachable | Run `activate_jdbcS_settings.sh`, check network/credentials |
+| Settings revert after container restart | UI "Save" was skipped or restart not confirmed | Re-do UI steps, ensure you click Save and confirm restart |
+| GeoServer logs show "No role service found" | Administrator role mapping missing | Re-do Step C: explicitly map `ADMIN` role |
+
+> 💡 **Debug tip:** If unsure whether JDBC is active, check GeoServer logs:  
+> `make logs ENV=prod \| grep -i jdbc`  
+> You should see lines like `JDBCRoleService initialized` or `Loading roles from PostgreSQL`.
+
+---
+
+## 🔧 Mode-Specific Setup (Makefile + UI)
+
+### Enable `jdbc-role` (Roles in DB) – Recommended First Step
+```bash
+# .env.prod settings
+GEOSERVER_SECURITY_MODE=jdbc-role
+GEOSERVER_ENABLE_JDBC_ROLE=true
+
+# Backend
+make up-all ENV=prod
+ENV_FILE=.env.prod ./scripts/activate_jdbcS_settings.sh
+
+# THEN: Complete Phase 2 UI Activation above
+```
+
+### Enable `jdbc-auth-role` (Users + Roles in DB)
+```bash
+# .env.prod settings
+GEOSERVER_SECURITY_MODE=jdbc-auth-role
+GEOSERVER_ENABLE_JDBC_ROLE=true
+GEOSERVER_ENABLE_JDBC_AUTH=true
+
+# Backend
+make up-all ENV=prod
+ENV_FILE=.env.prod ./scripts/activate_jdbcS_settings.sh
+
+# THEN: Complete Phase 2 UI Activation above
+# NOTE: Also activate "jdbc_login" service in UI (Step A)
+```
+
+### Enable `jdbc-config` (Full Config in DB) ⚠️ Advanced Only
+```bash
+# .env.prod settings
+GEOSERVER_SECURITY_MODE=jdbc-config
+GEOSERVER_ENABLE_JDBC_CONFIG=true
+COMMUNITY_PLUGINS=sec-oidc,jdbcconfig
+
+# Dockerfile build arg (REQUIRED – else plugins missing at runtime)
+# Add to docker-compose-prod.yml build args:
+#   BUILD_JDBC_PLUGINS: "true"
+
+# Backend
+make build-cache ENV=prod  # Rebuild image with JDBC plugins
+make up-all ENV=prod
+ENV_FILE=.env.prod ./scripts/activate_jdbcS_settings.sh
+
+# THEN: Complete Phase 2 UI Activation above
+# PLUS: Activate "jdbc_config" service in Security → Config Services
+```
+
+> ⚠️ **Critical for `jdbc-config`:**  
+> - `global.xml` is no longer authoritative – proxy settings applied via REST after startup  
+> - Use separate PostgreSQL schemas: `PG_SCHEMA_GEOSERVER` (security) vs `PG_SCHEMA_JDBCCONF` (config)  
+> - Test thoroughly in staging before production
+
+---
+
+## 🔄 Switching Back to `default` Mode
+
+```bash
+# 1. Edit .env.prod
+GEOSERVER_SECURITY_MODE=default
+GEOSERVER_ENABLE_JDBC_ROLE=false
+GEOSERVER_ENABLE_JDBC_AUTH=false
+GEOSERVER_ENABLE_JDBC_CONFIG=false
+
+# 2. Rebuild and restart (no DB dependency)
+make rebuild ENV=prod
+
+# 3. Verify file-based config is active
+make verify ENV=prod
+```
+
+> ℹ️ Your file-based config (`global.xml`, `users.xml`) will be used again.  
+> JDBC data remains in PostgreSQL but is ignored until you re-enable the mode.  
+> No data loss – you can switch back to JDBC later.
+
+---
+
+## 🏗️ Architecture Overview (Simplified)
+
+### Dual-Schema Design – Keep Them Separate!
+| Schema | Purpose | Contains |
+|--------|---------|----------|
+| `gs_auth_role_schema` | 👤 Security: users, roles, permissions | `users`, `roles`, `user_roles`, `groups` |
+| `gs_jdbcconfig_schema` | ⚙️ GeoServer config: layers, styles, settings | `workspace`, `datastore`, `layer`, `style` |
+
+> 🚫 **Never mix these schemas.** Separate schemas = easier backups, fewer conflicts, clearer permissions.
+
+### Why This Matters
+- ✅ **No file dependencies**: Critical data survives container rebuilds
+- ✅ **Stateless GeoServer**: Containers become truly ephemeral
+- ✅ **Enterprise-ready**: PostgreSQL handles replication, PITR, scaling
+- ✅ **Audit-friendly**: All security changes logged in DB
+
+---
+
+## 🔐 Production Security Checklist
+
+Before enabling JDBC in production:
+
+- [ ] PostgreSQL connection uses SSL/TLS (`sslmode=require` in JDBC URL)
+- [ ] Database credentials in `.env.prod` are strong, unique, and rotated
+- [ ] `gs_auth_role_schema` and `gs_jdbcconfig_schema` have separate DB users with least privilege
+- [ ] Regular automated backups configured for both schemas
+- [ ] UI activation steps tested in staging environment first
+- [ ] Rollback plan documented: how to return to `default` mode within 5 minutes
+- [ ] Monitoring/alerting set up for PostgreSQL connection health
+- [ ] **UI activation completed and verified** (this is the most missed step!)
+
+✅ Final validation:
+```bash
+make validate ENV=prod
+make verify-jdbc ENV=prod
+curl -u admin https://your-domain.com/geoserver/rest/security/roleServices.xml
+# Should show jdbc_role service in response
+```
+
+---
+
+## ❓ JDBC Troubleshooting
+
+### "It's not working" – Quick Diagnostic Flow
+```bash
+# 1. Is GeoServer running?
+make health ENV=prod
+
+# 2. Are JDBC flags set correctly?
+make shell-geoserver ENV=prod
+# Inside container:
+env | grep -E "JDBC|SECURITY_MODE"
+
+# 3. Can GeoServer reach PostgreSQL?
+make shell-geoserver ENV=prod
+# Inside container:
+nc -zv db 5432  # or your POSTGRES_HOST
+
+# 4. Did the prep script run successfully?
+ls -la /geoserver_data/data/security/
+# Should see jdbc_login/, jdbc_role/ directories
+
+# 5. Are UI steps complete?
+# → Check GeoServer UI: Security → Role Services → jdbc_role → Settings
+# → Verify "Saved" status and ADMIN role mapping
+```
+
+### Common Issues Table
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| `Test Connection` fails in UI | Wrong DB credentials, network, or SSL | Check `.env.prod`, test connectivity from container, ensure PostgreSQL allows connections |
+| "Driver Class Name" empty | GeoServer lazy init bug | Click another tab, return – field populates |
+| Admin loses access after JDBC enable | Administrator role not mapped | Re-do Step C: explicitly set `ADMIN` role |
+| New users disappear after restart | User service still file-backed | Activate `jdbc_login` via UI (Step A) |
+| Settings revert after restart | UI Save skipped or restart not confirmed | Re-do UI steps, ensure Save + restart confirmation |
+| `jdbc-config` mode: missing tables | Plugins not in image | Set `BUILD_JDBC_PLUGINS=true`, rebuild image |
+| Slow startup in JDBC mode | DB connection pool too small | Tune `maxPoolSize` in JDBC service config via UI |
+
+---
+
+## 📚 Related Docs
+
+| Topic | File |
+|-------|------|
+| Main README (default mode, Makefile reference) | [`readme.md`](./readme.md) |
+| Reverse proxy setup (Nginx/Traefik) | [`docs/reverse_proxy.md`](./docs/reverse_proxy.md) |
+| Plugin management & build process | [`docs/plugins.md`](./docs/plugins.md) |
+| Backup & restore procedures | [`docs/operations.md`](./docs/operations.md) |
+| Keycloak/OIDC integration (next step after JDBC) | [`readme_keycloak.md`](./readme_keycloak.md) |
+
+---
+
+> ℹ️ **Stack:** GeoServer 2.28.3 • PostgreSQL 14+ • JDBC Drivers • Docker  
+> 🔄 **Last Updated:** May 2026  
+> 🛠️ **Managed via Makefile** – run `make help` for quick reference  
+> ⚠️ **Final Reminder:** Backend config + UI activation + restart = JDBC working. Skip any one, and it fails silently.
+
+---
+
+## 🎯 Quick Decision Helper
+
+```mermaid
+graph TD
+    A[Start: Need PostgreSQL?] -->|No| B[Use default mode<br>make up ENV=prod]
+    A -->|Yes| C{What do you need in DB?}
+    C -->|Just roles/permissions| D[jdbc-role mode<br>✅ Safest first step]
+    C -->|Users + roles| E[jdbc-auth-role mode]
+    C -->|Everything: config, layers, styles| F[jdbc-config mode<br>⚠️ Advanced only]
+    
+    D --> G[Run make up-all + activate_jdbcS_settings.sh]
+    E --> G
+    F --> G
+    
+    G --> H[🚨 COMPLETE UI ACTIVATION<br>Security → jdbc_login → Save<br>Security → jdbc_role → Save + Map ADMIN<br>Confirm restart]
+    
+    H --> I[✅ Verify with make verify-jdbc]
+```
+
+> 💡 **Print this checklist and keep it next to your keyboard during JDBC setup:**
+> - [ ] Backend: `make up-all` completed
+> - [ ] Prep script: `activate_jdbcS_settings.sh` ran without errors
+> - [ ] UI: `jdbc_login` service activated + Saved
+> - [ ] UI: `jdbc_role` service activated + Saved
+> - [ ] UI: `ADMIN` role explicitly mapped
+> - [ ] Restart: Confirmed with `y` prompt
+> - [ ] Verification: `make verify-jdbc` returns ✅

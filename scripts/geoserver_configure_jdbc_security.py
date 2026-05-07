@@ -40,6 +40,18 @@ def env(name: str, default: str = "") -> str:
     return os.environ.get(name, default).strip()
 
 
+def parse_bool(name: str, default: bool = False) -> bool:
+    raw = env(name)
+    if raw == "":
+        return default
+    value = raw.lower()
+    if value in {"1", "true", "yes", "y", "on"}:
+        return True
+    if value in {"0", "false", "no", "n", "off"}:
+        return False
+    raise JdbcSecurityError(f"{name} must be a boolean value, got {raw!r}")
+
+
 def parse_list(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
@@ -395,6 +407,7 @@ def configure_jdbc_security() -> None:
     admin_user = env("GEOSERVER_ADMIN_USER", DEFAULT_ADMIN_USER)
     admin_password = env("GEOSERVER_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
     base_url = env("GEOSERVER_INTERNAL_URL", "http://localhost:8080/geoserver").rstrip("/")
+    role_auto_activate = parse_bool("GEOSERVER_JDBC_ROLE_AUTO_ACTIVATE", False)
 
     render_jdbc_role_service(data_dir, init_dir, role_service_name)
     ensure_role_tables_and_seed(admin_user, admin_role, group_admin_role)
@@ -418,6 +431,12 @@ def configure_jdbc_security() -> None:
         validate_role_seed(admin_user, admin_role)
         update_security_config(data_dir / "security" / "config.xml", role_service_name, [auth_provider_name])
     else:
+        if not role_auto_activate:
+            print(
+                "JDBC role service prepared without activation. "
+                "Run scripts/activate_jdbcS_settings.sh and complete UI activation before switching security config."
+            )
+            return
         update_security_config(data_dir / "security" / "config.xml", role_service_name)
 
     reload_geoserver(base_url)
@@ -427,7 +446,7 @@ def configure_jdbc_security() -> None:
     if mode == JDBC_AUTH_MODE:
         print(f"JDBC auth + role services configured: {env('JDBC_LOGIN_SERVICE_NAME', 'jdbc_login')} / {role_service_name}")
     else:
-        print(f"JDBC role service configured: {role_service_name}")
+        print(f"JDBC role service configured and activated: {role_service_name}")
 
 
 def main() -> int:
