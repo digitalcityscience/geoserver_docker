@@ -1,4 +1,4 @@
-.PHONY: help which-env validate verify verify-jdbc build build-cache up up-all start stop down restart ps logs logs-follow health rebuild rmVolumes clean init-dev init-prod shell-geoserver shell-db
+.PHONY: help which-env validate verify verify-jdbc verify-jdbc-role verify-jdbc-auth build build-cache up up-all start stop down restart ps logs logs-follow health rebuild rmVolumes clean init-dev init-prod shell-geoserver shell-db
 
 # -------------------------------------------------
 # ENV selection (DEFAULT = dev) or prod
@@ -77,12 +77,14 @@ help:
 	@echo "🔨 Build"
 	@echo "  make build [ENV=dev]              Build images (no cache)"
 	@echo "  make build-cache [ENV=dev]        Build images (with cache, faster for dev)"
-	@echo "  make rebuild [ENV=dev]            Rebuild + start SERVICE"
+	@echo "  make rebuild [ENV=dev]            Rebuild + start SERVICE (db+geoserver when SERVICE=geoserver)"
 	@echo ""
 	@echo "✅ Validation"
 	@echo "  make validate [ENV=prod]          Production env safety checks"
 	@echo "  make verify [ENV=dev]             Run runtime validation inside container"
 	@echo "  make verify-jdbc [ENV=dev]        Validate JDBC mode configuration"
+	@echo "  make verify-jdbc-role [ENV=dev]   Validate only JDBC role service/database"
+	@echo "  make verify-jdbc-auth [ENV=dev]   Validate only JDBC auth service/database"
 	@echo ""
 	@echo "🧹 Cleanup"
 	@echo "  make rmVolumes [ENV=dev]          Remove volumes ⚠️ DATA LOSS"
@@ -114,6 +116,20 @@ verify-jdbc: which-env
 		-f $(COMPOSE_FILE) \
 		exec geoserver python3 /scripts/geoserver_validate_jdbc.py || \
 		(echo "⚠️  JDBC validation skipped or failed – is JDBC mode enabled?"; exit 0)
+
+verify-jdbc-role: which-env
+	@echo "🔍 Running JDBC ROLE validation inside GeoServer container..."
+	$(COMPOSE) \
+		-f $(COMPOSE_FILE) \
+		exec -e JDBC_VALIDATE_SCOPE=role -e JDBC_VALIDATE_REQUIRE_ACTIVE_ROLE=false geoserver python3 /scripts/geoserver_validate_jdbc.py || \
+		(echo "⚠️  JDBC role validation failed"; exit 0)
+
+verify-jdbc-auth: which-env
+	@echo "🔍 Running JDBC AUTH validation inside GeoServer container..."
+	$(COMPOSE) \
+		-f $(COMPOSE_FILE) \
+		exec -e JDBC_VALIDATE_SCOPE=auth geoserver python3 /scripts/geoserver_validate_jdbc.py || \
+		(echo "⚠️  JDBC auth validation failed"; exit 0)
 
 # Quick HTTP health check (requires curl on host)
 health: which-env
@@ -207,9 +223,13 @@ rebuild: validate
 	$(COMPOSE) \
 		-f $(COMPOSE_FILE) \
 		build --no-cache
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		up -d $(SERVICE)
+	@if [ "$(SERVICE)" = "geoserver" ]; then \
+		echo "🚀 Starting db + geoserver [$(ENV)] after rebuild..."; \
+		$(COMPOSE) -f $(COMPOSE_FILE) up -d db geoserver; \
+	else \
+		echo "🚀 Starting $(SERVICE) [$(ENV)] after rebuild..."; \
+		$(COMPOSE) -f $(COMPOSE_FILE) up -d $(SERVICE); \
+	fi
 
 # -------------------------------------------------
 # Volume cleanup (DANGEROUS)

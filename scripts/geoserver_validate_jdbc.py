@@ -17,6 +17,7 @@ from urllib.request import Request, urlopen
 JDBC_MODES = {"jdbc-role", "jdbc-auth-role", "jdbc-config"}
 JDBC_AUTH_MODE = "jdbc-auth-role"
 JDBC_CONFIG_MODE = "jdbc-config"
+VALIDATION_SCOPES = {"auto", "role", "auth", "all"}
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -32,6 +33,25 @@ def require_identifier(name: str, value: str) -> str:
     if not IDENTIFIER_RE.match(value):
         raise ValueError(f"{name} must be a simple PostgreSQL identifier, got {value!r}")
     return value
+
+
+def parse_bool(name: str, default: bool) -> bool:
+    raw = env(name)
+    if raw == "":
+        return default
+    value = raw.lower()
+    if value in {"1", "true", "yes", "y", "on"}:
+        return True
+    if value in {"0", "false", "no", "n", "off"}:
+        return False
+    raise ValueError(f"{name} must be a boolean value, got {raw!r}")
+
+
+def validation_scope() -> str:
+    scope = env("JDBC_VALIDATE_SCOPE", "auto").lower()
+    if scope not in VALIDATION_SCOPES:
+        raise ValueError(f"JDBC_VALIDATE_SCOPE must be one of {sorted(VALIDATION_SCOPES)}, got {scope!r}")
+    return scope
 
 
 def auth_header(user: str, password: str) -> str:
@@ -76,15 +96,48 @@ def psql_scalar(sql: str) -> str:
     return result.stdout.strip().splitlines()[-1].strip()
 
 
-def validate_config(errors: list[str], mode: str) -> None:
+def validate_role_config(
+    errors: list[str],
+    root: ET.Element,
+    data_dir: Path,
+    role_service_name: str,
+    require_active_role: bool,
+) -> None:
+    role_dir = data_dir / "security" / "role" / role_service_name
+    active_role_service = (root.findtext("roleServiceName") or "").strip()
+    if require_active_role and active_role_service != role_service_name:
+        errors.append(f"Expected active role service {role_service_name!r}, got {active_role_service!r}")
+
+    for name in ("config.xml", "rolesddl.xml", "rolesdml.xml"):
+        if not (role_dir / name).exists():
+            errors.append(f"Missing JDBC role service file: {role_dir / name}")
+
+
+def validate_auth_config(
+    errors: list[str],
+    root: ET.Element,
+    data_dir: Path,
+    user_group_service_name: str,
+    auth_provider_name: str,
+) -> None:
+    user_group_dir = data_dir / "security" / "usergroup" / user_group_service_name
+    auth_dir = data_dir / "security" / "auth" / auth_provider_name
+    auth_provider_names = [item.text.strip() for item in root.findall("authProviderNames/string") if item.text]
+    if auth_provider_name not in auth_provider_names:
+        errors.append(f"Expected auth provider {auth_provider_name!r} in security config, got {auth_provider_names!r}")
+    for name in ("config.xml", "usersddl.xml", "usersdml.xml"):
+        if not (user_group_dir / name).exists():
+            errors.append(f"Missing JDBC user/group service file: {user_group_dir / name}")
+    if not (auth_dir / "config.xml").exists():
+        errors.append(f"Missing JDBC auth provider file: {auth_dir / 'config.xml'}")
+
+
+def validate_config(errors: list[str], mode: str, scope: str, require_active_role: bool) -> None:
     data_dir = Path(env("GEOSERVER_DATA_DIR", "/geoserver_data/data"))
     role_service_name = env("GS_ROLE_SERVICE_NAME", "jdbc_role")
     user_group_service_name = env("JDBC_LOGIN_SERVICE_NAME", "jdbc_login")
     auth_provider_name = env("JDBC_AUTH_SERVICE_NAME", "jdbc_auth")
     config_path = data_dir / "security" / "config.xml"
-    role_dir = data_dir / "security" / "role" / role_service_name
-    user_group_dir = data_dir / "security" / "usergroup" / user_group_service_name
-    auth_dir = data_dir / "security" / "auth" / auth_provider_name
 
     if not config_path.exists():
         errors.append(f"Missing GeoServer security config: {config_path}")
@@ -96,23 +149,14 @@ def validate_config(errors: list[str], mode: str) -> None:
         errors.append(f"Could not parse GeoServer security config: {exc}")
         return
 
-    active_role_service = (root.findtext("roleServiceName") or "").strip()
-    if active_role_service != role_service_name:
-        errors.append(f"Expected active role service {role_service_name!r}, got {active_role_service!r}")
+    run_role_checks = scope in {"auto", "role", "all"}
+    run_auth_checks = scope in {"auth", "all"} or (scope == "auto" and mode == JDBC_AUTH_MODE)
 
-    for name in ("config.xml", "rolesddl.xml", "rolesdml.xml"):
-        if not (role_dir / name).exists():
-            errors.append(f"Missing JDBC role service file: {role_dir / name}")
+    if run_role_checks:
+        validate_role_config(errors, root, data_dir, role_service_name, require_active_role)
 
-    if mode == JDBC_AUTH_MODE:
-        auth_provider_names = [item.text.strip() for item in root.findall("authProviderNames/string") if item.text]
-        if auth_provider_name not in auth_provider_names:
-            errors.append(f"Expected auth provider {auth_provider_name!r} in security config, got {auth_provider_names!r}")
-        for name in ("config.xml", "usersddl.xml", "usersdml.xml"):
-            if not (user_group_dir / name).exists():
-                errors.append(f"Missing JDBC user/group service file: {user_group_dir / name}")
-        if not (auth_dir / "config.xml").exists():
-            errors.append(f"Missing JDBC auth provider file: {auth_dir / 'config.xml'}")
+    if run_auth_checks:
+        validate_auth_config(errors, root, data_dir, user_group_service_name, auth_provider_name)
 
 
 def validate_rest(errors: list[str]) -> None:
@@ -124,10 +168,8 @@ def validate_rest(errors: list[str]) -> None:
         errors.append(f"GeoServer REST rejected configured admin credentials: HTTP {status}")
 
 
-def validate_database(errors: list[str], mode: str) -> None:
+def validate_role_database(errors: list[str], schema: str, admin_user: str, admin_role: str) -> None:
     schema = require_identifier("PG_SCHEMA_GEOSERVER", env("PG_SCHEMA_GEOSERVER", "gs_auth_role_schema"))
-    admin_user = env("GEOSERVER_ADMIN_USER", "admin")
-    admin_role = env("GS_ADMIN_ROLE", "ADMIN")
     role_sql = f"""
 SELECT COUNT(*)
 FROM {schema}.user_roles
@@ -143,20 +185,35 @@ WHERE username = {sql_literal(admin_user)}
     if role_count != "1":
         errors.append(f"Expected one admin JDBC role mapping, got {role_count}")
 
-    if mode == JDBC_AUTH_MODE:
-        user_sql = f"""
+def validate_auth_database(errors: list[str], schema: str, admin_user: str) -> None:
+    user_sql = f"""
 SELECT COUNT(*)
 FROM {schema}.users
 WHERE name = {sql_literal(admin_user)}
   AND enabled = 'Y';
 """
-        try:
-            user_count = psql_scalar(user_sql)
-        except Exception as exc:  # noqa: BLE001
-            errors.append(f"JDBC user database validation failed: {exc}")
-            return
-        if user_count != "1":
-            errors.append(f"Expected one enabled JDBC admin user, got {user_count}")
+    try:
+        user_count = psql_scalar(user_sql)
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"JDBC user database validation failed: {exc}")
+        return
+    if user_count != "1":
+        errors.append(f"Expected one enabled JDBC admin user, got {user_count}")
+
+
+def validate_database(errors: list[str], mode: str, scope: str) -> None:
+    schema = require_identifier("PG_SCHEMA_GEOSERVER", env("PG_SCHEMA_GEOSERVER", "gs_auth_role_schema"))
+    admin_user = env("GEOSERVER_ADMIN_USER", "admin")
+    admin_role = env("GS_ADMIN_ROLE", "ADMIN")
+
+    run_role_checks = scope in {"auto", "role", "all"}
+    run_auth_checks = scope in {"auth", "all"} or (scope == "auto" and mode == JDBC_AUTH_MODE)
+
+    if run_role_checks:
+        validate_role_database(errors, schema, admin_user, admin_role)
+
+    if run_auth_checks:
+        validate_auth_database(errors, schema, admin_user)
 
 
 
@@ -192,6 +249,9 @@ def validate_jdbc_config(errors: list[str]) -> None:
 
 def main() -> int:
     mode = env("GEOSERVER_SECURITY_MODE", "default")
+    scope = validation_scope()
+    require_active_role_default = scope != "role"
+    require_active_role = parse_bool("JDBC_VALIDATE_REQUIRE_ACTIVE_ROLE", require_active_role_default)
     if mode not in JDBC_MODES:
         print(f"JDBC validation skipped for GEOSERVER_SECURITY_MODE={mode}")
         return 0
@@ -201,9 +261,9 @@ def main() -> int:
         validate_jdbc_config(errors)
         validate_rest(errors)
     else:
-        validate_config(errors, mode)
+        validate_config(errors, mode, scope, require_active_role)
         validate_rest(errors)
-        validate_database(errors, mode)
+        validate_database(errors, mode, scope)
 
     if errors:
         print("GeoServer JDBC validation failed:", file=sys.stderr)
@@ -211,7 +271,10 @@ def main() -> int:
             print(f"- {error}", file=sys.stderr)
         return 1
 
-    print(f"GeoServer JDBC validation passed for mode: {mode}")
+    print(
+        f"GeoServer JDBC validation passed for mode: {mode} "
+        f"(scope: {scope}, require_active_role: {require_active_role})"
+    )
     return 0
 
 

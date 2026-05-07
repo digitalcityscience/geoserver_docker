@@ -384,6 +384,9 @@ def ensure_jdbc_admin_user(base_url: str, auth_user: str, auth_password: str, se
                 raise JdbcSecurityError(f"JDBC admin user update failed with HTTP {update_status}: {update_body}")
         return
 
+    if status == 500 and "users_pkey" in body and "already exists" in body:
+        return
+
     raise JdbcSecurityError(f"JDBC admin user creation failed with HTTP {status}: {body}")
 
 

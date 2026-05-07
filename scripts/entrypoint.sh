@@ -19,6 +19,7 @@ echo "GeoServer container starting..."
 : "${GEOSERVER_ENABLE_JDBC_CONFIG:=false}"
 : "${GEOSERVER_ENABLE_JDBC_AUTH:=false}"
 : "${GEOSERVER_ENABLE_JDBC_ROLE:=false}"
+: "${GEOSERVER_APPLY_JDBC_ON_STARTUP:=false}"
 : "${GEOSERVER_DISABLE_DEFAULT_ADMIN:=false}"
 : "${ENABLE_JDBC_CONFIG:=${GEOSERVER_ENABLE_JDBC_CONFIG}}"
 : "${ENABLE_JDBC_LOGIN:=${GEOSERVER_ENABLE_JDBC_AUTH}}"
@@ -46,6 +47,13 @@ case "${GEOSERVER_SECURITY_MODE}" in
     ENABLE_JDBC_LOGIN=false
     ENABLE_JDBC_CONFIG=true
     ;;
+  default|*)
+    GEOSERVER_ENABLE_JDBC_ROLE=false
+    GEOSERVER_ENABLE_JDBC_AUTH=false
+    GEOSERVER_ENABLE_JDBC_CONFIG=false
+    ENABLE_JDBC_LOGIN=false
+    ENABLE_JDBC_CONFIG=false
+    ;;
 esac
 
 export GEOSERVER_DATA_DIR GEOSERVER_INTERNAL_URL
@@ -54,6 +62,7 @@ export GEOSERVER_USE_HEADERS_PROXY_URL GEOSERVER_PUBLIC_URL PROXY_BASE_URL
 export GEOSERVER_ALLOW_WILDCARD_CORS GEOSERVER_CSRF_WHITELIST GEOSERVER_CSRF_DISABLED
 export GEOSERVER_SECURITY_MODE
 export GEOSERVER_ENABLE_JDBC_CONFIG GEOSERVER_ENABLE_JDBC_AUTH GEOSERVER_ENABLE_JDBC_ROLE
+export GEOSERVER_APPLY_JDBC_ON_STARTUP
 export GEOSERVER_DISABLE_DEFAULT_ADMIN
 export ENABLE_JDBC_CONFIG ENABLE_JDBC_LOGIN
 export GEOSERVER_CORE_FILE_TIMEOUT_SECONDS
@@ -202,8 +211,14 @@ else
 fi
 
 python3 /scripts/geoserver_set_admin_credentials.py
-python3 /scripts/geoserver_configure_jdbc_security.py
-python3 /scripts/geoserver_configure_jdbc_config.py
+if [ "${GEOSERVER_APPLY_JDBC_ON_STARTUP}" = "true" ]; then
+  echo "GEOSERVER_APPLY_JDBC_ON_STARTUP=true -> applying JDBC bootstrap during startup"
+  python3 /scripts/geoserver_configure_jdbc_security.py
+  python3 /scripts/geoserver_configure_jdbc_config.py
+else
+  echo "Skipping JDBC bootstrap on startup (manual activation mode)"
+  echo "Run ENV_FILE=.env.<env> ./scripts/activate_jdbcS_settings.sh when you are ready"
+fi
 
 if [ -n "${PROXY_BASE_URL:-}" ] || [ "${GEOSERVER_USE_HEADERS_PROXY_URL:-false}" = "true" ]; then
   python3 /scripts/geoserver_apply_proxy_settings.py

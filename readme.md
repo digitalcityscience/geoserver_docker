@@ -107,8 +107,8 @@ Set `GEOSERVER_SECURITY_MODE` in your `.env` file.
 | Mode | Where settings are stored | Needs PostgreSQL? | Use this when… |
 |------|--------------------------|-------------------|----------------|
 | `default` ⭐ | Simple files (XML) | ❌ No | **Start here.** Works for 90% of cases. |
-| `jdbc-role` | Roles in DB, users in files | ✅ Yes | You want to manage roles from PostgreSQL. |
-| `jdbc-auth-role` | Users + Roles in DB | ✅ Yes | You want full user management from PostgreSQL. |
+| `jdbc-role` | JDBC ROLE in DB, users in files | ✅ Yes | You want role/permission mappings in PostgreSQL. |
+| `jdbc-auth-role` | JDBC ROLE + JDBC AUTH in DB | ✅ Yes | You want both users and roles managed from PostgreSQL. |
 | `jdbc-config` | Everything in DB | ✅ Yes | Advanced use only. You know what you're doing. |
 
 > 🚦 **Golden Rule:** Always start with `default`. Get it working. Then switch modes if you truly need to.
@@ -131,6 +131,13 @@ make verify-jdbc ENV=dev
 
 > 💡 **Tip:** Use `make up-all` (not just `up`) when enabling any JDBC mode, because PostgreSQL must be running.
 
+### 🧭 JDBC ROLE vs JDBC AUTH (Quick Mental Model)
+
+- **JDBC ROLE** = role tables and mappings (`roles`, `user_roles`) managed in PostgreSQL.
+- **JDBC AUTH** = user/group tables (`users`, `groups`, etc.) managed in PostgreSQL.
+- `jdbc-role` enables only **JDBC ROLE**.
+- `jdbc-auth-role` enables both **JDBC ROLE** and **JDBC AUTH**.
+
 ---
 
 ### 📋 Mode-Specific Environment Variables
@@ -144,6 +151,12 @@ make verify-jdbc ENV=dev
 > ⚠️ **Important for `jdbc-config`:** This mode also requires `BUILD_JDBC_PLUGINS=true` in your Dockerfile build args, otherwise the required plugins won't be available at runtime.
 
 > ℹ️ **Important for `jdbc-role`:** Startup now prepares JDBC role files/tables by default and keeps file-based login active. Complete activation with `ENV_FILE=.env.prod ./scripts/activate_jdbcS_settings.sh` and GeoServer UI steps. Set `GEOSERVER_JDBC_ROLE_AUTO_ACTIVATE=true` only if you explicitly want automatic switch-over at startup.
+
+> ℹ️ **Important for `jdbc-auth-role`:** Run `ENV_FILE=.env.prod ./scripts/activate_jdbcS_settings.sh` and follow UI steps in this order:
+> 1. `Security → Role Services → jdbc_role → Test connection → Save`
+> 2. `Security → User Group Services → jdbc_login → Test connection → Save`
+>
+> The script then validates JDBC ROLE + JDBC AUTH and proceeds with admin bootstrap.
 
 ---
 
