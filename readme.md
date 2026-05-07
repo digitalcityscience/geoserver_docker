@@ -1,4 +1,4 @@
-# GeoServer Docker 
+# GeoServer Docker – Simple, Production-Ready
 
 > 🎯 **In one sentence:**  
 > Run GeoServer 2.28.3 in Docker. Works out of the box. Add PostgreSQL later if you need it.
@@ -7,90 +7,108 @@
 
 ## 🚀 Get Started in 3 Minutes
 
-### For Development
+### Step 1: Set Your Environment (Do This Once)
 ```bash
-# 1. Clone the repo
-git clone <your-repo-url> && cd geoserver-docker
+# For development (default):
+make set-env-dev
 
-# 2. Create your dev environment file
-make init-dev
+# For production (when ready):
+make set-env-prod
+```
+> 💡 This sets your default environment permanently.
 
-# 3. Start GeoServer
-make up
+### Step 2: Bootstrap & Start
+```bash
+# Development:
+make init-dev    # Create .env.dev from template
+make up          # Start GeoServer + PostgreSQL
+
+# Production:
+make init-prod   # Create .env.prod from template
+vim .env.prod    # Edit passwords, URLs, etc.
+make validate    # Run safety checks (mandatory)
+make up          # Start
 ```
 
-✅ **You're done!**  
+✅ **Done!**  
 🌐 Open: http://localhost:8080/geoserver  
 🔐 Login: `admin` / `geoserver`
 
-### For Production
-```bash
-# 1. Create your prod environment file
-make init-prod
-
-# 2. EDIT .env.prod – set strong passwords and your domain
-vim .env.prod
-
-# 3. Run safety checks (mandatory)
-make validate ENV=prod
-
-# 4. Start
-make up ENV=prod
-```
+> 🔄 **Check your current environment anytime:**  
+> `make current-env`
 
 ---
 
 ## 🎮 Makefile Cheat Sheet
 
-> 💡 `ENV` defaults to `dev`. You can skip it for local work.
-
-### Everyday Commands
+### 🎯 Environment Management (Persistent)
 ```bash
-make up                     # Start GeoServer (dev)
-make up ENV=prod            # Start GeoServer (production)
-make up-all                 # Start GeoServer + PostgreSQL (dev)
-make down                   # Stop containers
-make restart                # Restart everything
-make logs-follow            # Watch logs in real-time (Ctrl+C to stop)
-make health                 # Quick "is it alive?" check
+make set-env-dev          # Set dev as default (no more ENV=dev typing)
+make set-env-prod         # Set prod as default ⚠️
+make current-env          # Show which environment is active
 ```
 
-### When You Change Code or Config
+### 🔄 Lifecycle (SERVICE defaults to `geoserver`)
 ```bash
-make rebuild                # Rebuild image + restart GeoServer
-make rebuild ENV=prod       # Same, for production
+make up                   # Start db + geoserver
+make up-all               # Same as up (explicit)
+make start / stop / down  # Container control
+make restart              # Full restart (down + up)
 ```
 
-### Debugging & Inspection
+### 🔍 Inspection & Debugging
 ```bash
-make ps                     # See what's running
-make logs                   # Show last 100 log lines
-make shell-geoserver        # Open terminal inside GeoServer container
-make shell-db               # Open terminal inside PostgreSQL container
-make verify                 # Run internal validation checks
+make ps                   # Show container status
+make logs                 # Show geoserver logs (last 100 lines)
+make logs-follow          # Follow logs in real-time (Ctrl+C to stop)
+make health               # Quick HTTP health check
+make shell-geoserver      # Open shell inside GeoServer container
+make shell-db             # Open shell inside PostgreSQL container
 ```
 
-### Cleanup ⚠️
+### 🔨 Build & Rebuild
 ```bash
-make clean                  # Remove containers, networks, volumes (DATA LOSS)
-make rmVolumes              # Remove volumes only (asks for confirmation)
+make build                # Rebuild image (no cache – clean build)
+make build-cache          # Rebuild image (with cache – faster for dev)
+make rebuild              # Build + restart (db+geoserver if SERVICE=geoserver)
 ```
 
-### Help
+### ✅ Validation
 ```bash
-make help                   # Show all commands
-make which-env              # See which .env and compose files are loaded
+make validate             # Production safety checks (auto-runs if ENV=prod)
+make verify               # Runtime validation inside container
+make verify-jdbc          # Full JDBC mode validation
+make verify-jdbc-role     # Validate JDBC role service only
+make verify-jdbc-auth     # Validate JDBC auth service only
+```
+
+### 🧹 Cleanup ⚠️
+```bash
+make rmVolumes            # Remove volumes (CONFIRMATION REQUIRED – DATA LOSS)
+make clean                # Full cleanup: down -v --remove-orphans
+```
+
+### 💡 Pro Tips
+```bash
+# Override environment temporarily (doesn't change default):
+make up ENV=prod          # Use prod just for this command
+
+# Target a different service:
+make logs SERVICE=db      # Show database logs instead of geoserver
+
+# Quick status check:
+make current-env && make ps && make health
 ```
 
 ---
 
 ## ⚙️ Only 5 Settings You Need to Change
 
-Open `.env.dev` or `.env.prod` and edit these:
+Edit these in `.env.dev` or `.env.prod`:
 
 | Variable | Example | What it does |
 |----------|---------|-------------|
-| `GEOSERVER_ADMIN_PASSWORD` | `MySecurePass!2024` | Sets the admin password (change this!) |
+| `GEOSERVER_ADMIN_PASSWORD` | `MySecurePass!2024` | Sets the admin password (**change this!**) |
 | `GEOSERVER_PUBLIC_URL` | `https://maps.yourcompany.com/geoserver` | The URL users see in their browser |
 | `PROXY_BASE_URL` | `https://maps.yourcompany.com/geoserver` | Base URL for all generated links (WMS, REST, etc.) |
 | `GEOSERVER_CORS_ALLOWED_ORIGINS` | `https://app.yourcompany.com` | Which websites can call your GeoServer API |
@@ -107,15 +125,15 @@ Set `GEOSERVER_SECURITY_MODE` in your `.env` file.
 | Mode | Where settings are stored | Needs PostgreSQL? | Use this when… |
 |------|--------------------------|-------------------|----------------|
 | `default` ⭐ | Simple files (XML) | ❌ No | **Start here.** Works for 90% of cases. |
-| `jdbc-role` | JDBC ROLE in DB, users in files | ✅ Yes | You want role/permission mappings in PostgreSQL. |
-| `jdbc-auth-role` | JDBC ROLE + JDBC AUTH in DB | ✅ Yes | You want both users and roles managed from PostgreSQL. |
+| `jdbc-role` | Roles in DB, users in files | ✅ Yes | You want role/permission mappings in PostgreSQL. |
+| `jdbc-auth-role` | Users + Roles in DB | ✅ Yes | You want full user/role management from PostgreSQL. |
 | `jdbc-config` | Everything in DB | ✅ Yes | Advanced use only. You know what you're doing. |
 
 > 🚦 **Golden Rule:** Always start with `default`. Get it working. Then switch modes if you truly need to.
 
 ---
 
-### 🔁 How to Switch Modes 
+### 🔁 How to Switch Modes
 
 ```bash
 # 1. Edit your .env file
@@ -123,20 +141,28 @@ GEOSERVER_SECURITY_MODE=jdbc-role
 GEOSERVER_ENABLE_JDBC_ROLE=true
 
 # 2. Rebuild and start with database
-make up-all ENV=dev
+make up-all
 
-# 3. Verify the mode is active
-make verify-jdbc ENV=dev
+# 3. Run JDBC activation (required)
+make activate-jdbc
+
+# 4. Verify the mode is active
+make verify-jdbc
 ```
 
 > 💡 **Tip:** Use `make up-all` (not just `up`) when enabling any JDBC mode, because PostgreSQL must be running.
 
+---
+
 ### 🧭 JDBC ROLE vs JDBC AUTH (Quick Mental Model)
 
-- **JDBC ROLE** = role tables and mappings (`roles`, `user_roles`) managed in PostgreSQL.
-- **JDBC AUTH** = user/group tables (`users`, `groups`, etc.) managed in PostgreSQL.
-- `jdbc-role` enables only **JDBC ROLE**.
-- `jdbc-auth-role` enables both **JDBC ROLE** and **JDBC AUTH**.
+| Component | What it manages | Table examples |
+|-----------|----------------|----------------|
+| **JDBC ROLE** | Role definitions and user→role mappings | `roles`, `user_roles`, `group_roles` |
+| **JDBC AUTH** | User/group accounts and credentials | `users`, `groups`, `user_props` |
+
+- `jdbc-role` mode → Enables **JDBC ROLE** only (users stay file-backed)
+- `jdbc-auth-role` mode → Enables **JDBC ROLE + JDBC AUTH** (full DB-backed security)
 
 ---
 
@@ -144,19 +170,23 @@ make verify-jdbc ENV=dev
 
 | Mode | Required `.env` settings |
 |------|-------------------------|
-| `jdbc-role` | `GEOSERVER_ENABLE_JDBC_ROLE=true` + `GEOSERVER_JDBC_ROLE_AUTO_ACTIVATE=false` (recommended) |
+| `jdbc-role` | `GEOSERVER_ENABLE_JDBC_ROLE=true` |
 | `jdbc-auth-role` | `GEOSERVER_ENABLE_JDBC_ROLE=true` + `GEOSERVER_ENABLE_JDBC_AUTH=true` |
 | `jdbc-config` | `GEOSERVER_ENABLE_JDBC_CONFIG=true` + `COMMUNITY_PLUGINS=sec-oidc,jdbcconfig` |
 
 > ⚠️ **Important for `jdbc-config`:** This mode also requires `BUILD_JDBC_PLUGINS=true` in your Dockerfile build args, otherwise the required plugins won't be available at runtime.
 
-> ℹ️ **Important for `jdbc-role`:** Startup now prepares JDBC role files/tables by default and keeps file-based login active. Complete activation with `ENV_FILE=.env.prod ./scripts/activate_jdbcS_settings.sh` and GeoServer UI steps. Set `GEOSERVER_JDBC_ROLE_AUTO_ACTIVATE=true` only if you explicitly want automatic switch-over at startup.
-
-> ℹ️ **Important for `jdbc-auth-role`:** Run `ENV_FILE=.env.prod ./scripts/activate_jdbcS_settings.sh` and follow UI steps in this order:
-> 1. `Security → Role Services → jdbc_role → Test connection → Save`
-> 2. `Security → User Group Services → jdbc_login → Test connection → Save`
->
-> The script then validates JDBC ROLE + JDBC AUTH and proceeds with admin bootstrap.
+> ⚠️ **Required for `jdbc-role` / `jdbc-auth-role`:**  
+> Backend config alone is **not enough**. After `make up-all`, you **must** run JDBC activation and complete the UI steps.  
+> **Without this step, JDBC ROLE / JDBC AUTH will not work.**
+> ```bash
+> make activate-jdbc
+> ```
+> This target runs:
+> ```bash
+> ENV_FILE=.env.<selected-env> ./scripts/activate_jdbcS_settings.sh
+> ```
+> Then follow the UI activation guide in [`readme_jdbc.md`](./readme_jdbc.md).
 
 ---
 
@@ -169,8 +199,8 @@ GEOSERVER_ENABLE_JDBC_ROLE=false
 GEOSERVER_ENABLE_JDBC_AUTH=false
 GEOSERVER_ENABLE_JDBC_CONFIG=false
 
-# 2. Rebuild and restart (without DB dependency)
-make rebuild ENV=dev
+# 2. Rebuild and restart (no DB dependency)
+make rebuild
 ```
 
 > ℹ️ Your file-based config (`global.xml`, `users.xml`, etc.) will be used again. JDBC-backed data remains in PostgreSQL but is ignored until you re-enable the mode.
@@ -195,19 +225,20 @@ That guide covers:
 > - Just testing or running a simple instance? → **Stay on `default`**  
 > - Need to sync roles across multiple GeoServer instances? → **Try `jdbc-role`**  
 > - Building a multi-tenant SaaS with centralized user management? → **Consider `jdbc-auth-role`**  
-> - Need full config-as-code with database versioning? → **Read `readme_jdbc.md` first, then evaluate `jdbc-config`**```
+> - Need full config-as-code with database versioning? → **Read `readme_jdbc.md` first, then evaluate `jdbc-config`**
 
 ---
 
 ## ⚠️ PRODUCTION CHECKLIST – DO NOT SKIP
 
-Before you deploy to production (`ENV=prod`), verify **every item below**:
+Before you deploy to production (`make set-env-prod`), verify **every item below**:
 
 ### 🔐 Security
 - [ ] `GEOSERVER_ADMIN_PASSWORD` is **NOT** `geoserver` (use a strong, unique password)
 - [ ] `GEOSERVER_CORS_ALLOWED_ORIGINS` does **NOT** contain `*` (list exact domains only)
 - [ ] `GEOSERVER_CSRF_WHITELIST` includes your public domain
 - [ ] `.env.prod` is **NOT** committed to Git (check `.gitignore`)
+- [ ] `.env-selected` is in `.gitignore` (prevents accidental env commits)
 
 ### 🌐 Networking & Proxy
 - [ ] `GEOSERVER_PUBLIC_URL` and `PROXY_BASE_URL` use `https://` and your real domain
@@ -225,10 +256,10 @@ Before you deploy to production (`ENV=prod`), verify **every item below**:
 ### ✅ Validation
 ```bash
 # Run this before every production deploy:
-make validate ENV=prod
+make validate
 
 # After startup, verify inside the container:
-make verify ENV=prod
+make verify
 ```
 
 > ❗ If any check fails, **do not proceed**. Fix the issue first.
@@ -245,21 +276,20 @@ make verify ENV=prod
 | JDBC mode won't connect | PostgreSQL not ready or wrong credentials | Use `make up-all` to start DB + GeoServer together |
 | Startup is very slow first time | Plugins downloading at runtime | Set `BUILD_JDBC_PLUGINS=true` in Dockerfile to bake them in |
 | "Permission denied" on data directory | Volume mounted with wrong user | Ensure volume is writable by UID 1000 (Tomcat) |
+| "Invalid ENV" error | `.env-selected` has wrong value | Run `make set-env-dev` or `make set-env-prod` |
 
 ### Quick Diagnostic Commands
 ```bash
-make health                     # Is GeoServer responding?
-make logs                       # What did it say on startup?
-make verify                     # Are runtime settings valid?
-make shell-geoserver            # Debug inside the container
+make current-env          # Which environment am I in?
+make health               # Is GeoServer responding?
+make logs                 # What did it say on startup?
+make verify               # Are runtime settings valid?
+make shell-geoserver      # Debug inside the container
 ```
-
----
-
-
 ---
 
 > ℹ️ **Stack:** GeoServer 2.28.3 • Tomcat 9 • JDK 17 • Docker  
 > 🔄 **Last Updated:** May 2026  
 > 🛠️ **Managed via Makefile** – run `make help` for quick reference  
-> 📄 **License:** MIT – use, modify, and deploy freely
+> 📄 **License:** MIT – use, modify, and deploy freely  
+> 🔐 **Remember:** Set your environment once with `make set-env-dev`, then just `make up` and work.

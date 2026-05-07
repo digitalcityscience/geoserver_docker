@@ -1,139 +1,166 @@
-.PHONY: help which-env validate verify verify-jdbc verify-jdbc-role verify-jdbc-auth build build-cache up up-all start stop down restart ps logs logs-follow health rebuild rmVolumes clean init-dev init-prod shell-geoserver shell-db
+.PHONY: help validate verify verify-jdbc verify-jdbc-role verify-jdbc-auth activate-jdbc build build-cache up up-all start stop down restart ps logs logs-follow health rebuild rmVolumes clean init-dev init-prod shell-geoserver shell-db set-env-dev set-env-prod current-env
 
 # -------------------------------------------------
-# ENV selection (DEFAULT = dev) or prod
+# 🎯 Smart ENV Handling (Persistent)
 # -------------------------------------------------
-ENV ?= dev
+# Default: dev
+# Persisted: .env-selected file (should be gitignored)
+# Override: make up ENV=prod (temporary for single command)
+ENV_SELECTED_FILE := .env-selected
+ENV ?= $(shell [ -f $(ENV_SELECTED_FILE) ] && cat $(ENV_SELECTED_FILE) 2>/dev/null || echo dev)
+
 SERVICE ?= geoserver
-COMPOSE ?= docker-compose
+COMPOSE ?= docker compose
 DOCKER_CONFIG ?= $(CURDIR)/.docker-config
-
 export DOCKER_CONFIG
 
-ENV_FILE := .env.$(ENV)
+# Use absolute paths to avoid directory confusion
+ENV_FILE := $(CURDIR)/.env.$(ENV)
 ENV_PATH := $(abspath $(ENV_FILE))
-COMPOSE_FILE := docker-compose-$(ENV).yml
+COMPOSE_FILE := $(CURDIR)/docker-compose-$(ENV).yml
 
 # Safety: allow only dev / prod
 ifeq ($(filter $(ENV),dev prod),)
-  $(error ❌ Invalid ENV='$(ENV)'. Use ENV=dev or ENV=prod)
+  $(error ❌ Invalid ENV='$(ENV)'. Use 'make set-env-dev' or 'make set-env-prod')
 endif
 
 # -------------------------------------------------
-# Load env file (fail fast if missing)
+# 🛡️ Smart Env Loading (Only for commands that need it)
 # -------------------------------------------------
-ifneq ("$(wildcard $(ENV_FILE))","")
-  include $(ENV_FILE)
-  export $(shell sed -n 's/^\s*\([A-Za-z_][A-Za-z0-9_]*\)\s*=.*/\1/p' $(ENV_FILE))
-else
-  $(error ❌ Missing $(ENV_FILE). Run 'make init-$(ENV)' first)
+# These commands do NOT require an env file to be present:
+SAFE_TARGETS := set-env-dev set-env-prod init-dev init-prod help current-env clean rmVolumes rmvolumes
+
+# Check if the current target is "safe" (doesn't need env file)
+IS_SAFE_TARGET := $(filter $(SAFE_TARGETS),$(MAKECMDGOALS))
+
+# Only load/validate env file if target is NOT safe
+ifeq ($(IS_SAFE_TARGET),)
+  ifneq ("$(wildcard $(ENV_FILE))","")
+    include $(ENV_FILE)
+    export $(shell sed -n 's/^\s*\([A-Za-z_][A-Za-z0-9_]*\)\s*=.*/\1/p' $(ENV_FILE))
+  else
+    $(error ❌ Missing $(ENV_FILE). Run 'make init-$(ENV)' first)
+  endif
+
+  # Check compose file exists (only for non-safe targets)
+  ifeq ("$(wildcard $(COMPOSE_FILE))","")
+    $(error ❌ Missing $(COMPOSE_FILE))
+  endif
 endif
 
 # -------------------------------------------------
-# Check compose file
+# 🔄 ENV Persistence Commands
 # -------------------------------------------------
-ifneq ("$(wildcard $(COMPOSE_FILE))","")
-else
-  $(error ❌ Missing $(COMPOSE_FILE))
-endif
+set-env-dev:
+	@echo "dev" > $(ENV_SELECTED_FILE)
+	@echo "✅ Environment set to: dev (persisted in $(ENV_SELECTED_FILE))"
+	@echo "💡 Tip: Add '$(ENV_SELECTED_FILE)' to .gitignore to avoid committing environment choice"
+
+set-env-prod:
+	@echo "prod" > $(ENV_SELECTED_FILE)
+	@echo "✅ Environment set to: prod (persisted in $(ENV_SELECTED_FILE)) ⚠️"
+	@echo "💡 Tip: Run 'make validate' before deploying to production"
+
+current-env:
+	@echo "🔧 Current environment: $(ENV)"
+	@echo "📄 Env file: $(ENV_FILE)"
+	@echo "🐳 Compose file: $(COMPOSE_FILE)"
+	@echo "💡 Tip: Use 'make set-env-prod' to switch permanently"
 
 # -------------------------------------------------
-# Helpers
+# Help
 # -------------------------------------------------
-which-env:
-	@echo "🔧 ENV=$(ENV)"
-	@echo "📄 ENV_FILE=$(ENV_FILE)"
-	@echo "📍 ENV_PATH=$(ENV_PATH)"
-	@echo "🐳 COMPOSE_FILE=$(COMPOSE_FILE)"
-	@echo "🧰 COMPOSE_CMD=$(COMPOSE)"
-	@echo "🗂️  DOCKER_CONFIG=$(DOCKER_CONFIG)"
-	@echo "🧩 SERVICE=$(SERVICE)"
-
 help:
 	@echo "GeoServer Docker – Makefile Reference"
 	@echo ""
-	@echo "Usage: make <target> [ENV=dev|prod] [SERVICE=...]"
+	@echo "🎯 Environment (persistent)"
+	@echo "  make set-env-dev          Set default to dev (no more ENV=dev typing)"
+	@echo "  make set-env-prod         Set default to prod ⚠️"
+	@echo "  make current-env          Show current environment"
 	@echo ""
 	@echo "🚀 Bootstrap"
-	@echo "  make init-dev                     Create .env.dev from template"
-	@echo "  make init-prod                    Create .env.prod from template"
+	@echo "  make init-dev             Create .env.dev from template (if missing)"
+	@echo "  make init-prod            Create .env.prod from template (if missing)"
 	@echo ""
-	@echo "🔄 Lifecycle"
-	@echo "  make up [ENV=dev]                 Build + start SERVICE (default: geoserver)"
-	@echo "  make up-all [ENV=dev]             Build + start db + geoserver"
-	@echo "  make start [ENV=dev]              Start existing containers"
-	@echo "  make stop [ENV=dev]               Stop running containers"
-	@echo "  make down [ENV=dev]               Stop + remove containers/networks"
-	@echo "  make restart [ENV=dev]            Full restart (down + up)"
+	@echo "🔄 Lifecycle (SERVICE defaults to geoserver)"
+	@echo "  make up                   Start db + geoserver"
+	@echo "  make up-all               Same as up (explicit)"
+	@echo "  make start / stop / down  Container control"
+	@echo "  make restart              Full restart (down + up)"
 	@echo ""
 	@echo "🔍 Inspection"
-	@echo "  make ps [ENV=dev]                 Show container status"
-	@echo "  make logs [ENV=dev] [SERVICE=x]   Show logs (tail -n 100)"
-	@echo "  make logs-follow [ENV=dev]        Follow logs in real-time (-f)"
-	@echo "  make health [ENV=dev]             Quick health check via HTTP"
-	@echo "  make shell-geoserver [ENV=dev]    Open shell in GeoServer container"
-	@echo "  make shell-db [ENV=dev]           Open shell in PostgreSQL container"
+	@echo "  make ps                   Show container status"
+	@echo "  make logs                 Show geoserver logs (last 100 lines)"
+	@echo "  make logs-follow          Follow logs in real-time (Ctrl+C)"
+	@echo "  make health               Quick HTTP health check"
+	@echo "  make shell-geoserver      Open shell in GeoServer container"
+	@echo "  make shell-db             Open shell in PostgreSQL container"
 	@echo ""
 	@echo "🔨 Build"
-	@echo "  make build [ENV=dev]              Build images (no cache)"
-	@echo "  make build-cache [ENV=dev]        Build images (with cache, faster for dev)"
-	@echo "  make rebuild [ENV=dev]            Rebuild + start SERVICE (db+geoserver when SERVICE=geoserver)"
+	@echo "  make build                Rebuild image (no cache)"
+	@echo "  make build-cache          Rebuild image (with cache, faster for dev)"
+	@echo "  make rebuild              Build + restart (db+geoserver if SERVICE=geoserver)"
 	@echo ""
 	@echo "✅ Validation"
-	@echo "  make validate [ENV=prod]          Production env safety checks"
-	@echo "  make verify [ENV=dev]             Run runtime validation inside container"
-	@echo "  make verify-jdbc [ENV=dev]        Validate JDBC mode configuration"
-	@echo "  make verify-jdbc-role [ENV=dev]   Validate only JDBC role service/database"
-	@echo "  make verify-jdbc-auth [ENV=dev]   Validate only JDBC auth service/database"
+	@echo "  make validate             Prod safety checks (if ENV=prod)"
+	@echo "  make verify               Runtime validation (any mode)"
+	@echo "  make verify-jdbc          Full JDBC validation"
+	@echo "  make verify-jdbc-role     Validate JDBC role service only"
+	@echo "  make verify-jdbc-auth     Validate JDBC auth service only"
+	@echo "  make activate-jdbc        Run manual JDBC activation flow (required for jdbc-role/auth)"
 	@echo ""
-	@echo "🧹 Cleanup"
-	@echo "  make rmVolumes [ENV=dev]          Remove volumes ⚠️ DATA LOSS"
-	@echo "  make clean [ENV=dev]              Full cleanup: down -v --remove-orphans"
+	@echo "🧹 Cleanup ⚠️"
+	@echo "  make rmVolumes            Remove volumes (DATA LOSS)"
+	@echo "  make clean                Full cleanup: down -v --remove-orphans"
+	@echo ""
+	@echo "💡 Quick Start:"
+	@echo "  make set-env-dev          # Set dev as default (once)"
+	@echo "  make init-dev && make up  # Bootstrap + start"
+	@echo "  make logs-follow          # Watch logs"
+	@echo "  make shell-geoserver      # Debug inside container"
 
 # -------------------------------------------------
 # Validation
 # -------------------------------------------------
-validate: which-env
+validate: current-env
 	@if [ "$(ENV)" = "prod" ]; then \
 		echo "🔎 Running production safety checks..."; \
 		set -a; . "$(ENV_PATH)"; set +a; \
 		bash scripts/check_prod_env.sh; \
 	else \
-		echo "ℹ️  ENV=$(ENV): skipping production checks (use ENV=prod to enable)"; \
+		echo "ℹ️  ENV=$(ENV): skipping prod checks (use 'make set-env-prod' to enable)"; \
 	fi
 
-# Runtime validation inside container (works for any mode)
-verify: which-env
+verify: current-env
 	@echo "🔍 Running runtime validation inside GeoServer container..."
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		exec geoserver python3 /scripts/geoserver_validate_runtime.py
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) exec geoserver python3 /scripts/geoserver_validate_runtime.py
 
-# JDBC-specific validation (only relevant when JDBC mode is enabled)
-verify-jdbc: which-env
+verify-jdbc: current-env
 	@echo "🔍 Running JDBC validation inside GeoServer container..."
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		exec geoserver python3 /scripts/geoserver_validate_jdbc.py || \
-		(echo "⚠️  JDBC validation skipped or failed – is JDBC mode enabled?"; exit 0)
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) exec geoserver python3 /scripts/geoserver_validate_jdbc.py || \
+	(echo "⚠️  JDBC validation skipped or failed – is JDBC mode enabled?"; exit 0)
 
-verify-jdbc-role: which-env
+verify-jdbc-role: current-env
 	@echo "🔍 Running JDBC ROLE validation inside GeoServer container..."
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		exec -e JDBC_VALIDATE_SCOPE=role -e JDBC_VALIDATE_REQUIRE_ACTIVE_ROLE=false geoserver python3 /scripts/geoserver_validate_jdbc.py || \
-		(echo "⚠️  JDBC role validation failed"; exit 0)
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) \
+		exec -e JDBC_VALIDATE_SCOPE=role -e JDBC_VALIDATE_REQUIRE_ACTIVE_ROLE=false \
+		geoserver python3 /scripts/geoserver_validate_jdbc.py || \
+	(echo "⚠️  JDBC role validation failed"; exit 0)
 
-verify-jdbc-auth: which-env
+verify-jdbc-auth: current-env
 	@echo "🔍 Running JDBC AUTH validation inside GeoServer container..."
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		exec -e JDBC_VALIDATE_SCOPE=auth geoserver python3 /scripts/geoserver_validate_jdbc.py || \
-		(echo "⚠️  JDBC auth validation failed"; exit 0)
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) \
+		exec -e JDBC_VALIDATE_SCOPE=auth \
+		geoserver python3 /scripts/geoserver_validate_jdbc.py || \
+	(echo "⚠️  JDBC auth validation failed"; exit 0)
 
-# Quick HTTP health check (requires curl on host)
-health: which-env
-	@echo "🏥 Checking GeoServer health at http://localhost:$${GEOSERVER_HOST_PORT:-8080}/geoserver/web/"
+activate-jdbc: validate
+	@echo "🧩 Running JDBC activation flow for $(ENV)..."
+	@echo "ℹ️  This is required for jdbc-role and jdbc-auth-role modes."
+	cd $(CURDIR) && ENV_FILE=.env.$(ENV) ./scripts/activate_jdbcS_settings.sh
+
+health: current-env
+	@echo "🏥 Checking GeoServer at http://localhost:$${GEOSERVER_HOST_PORT:-8080}/geoserver/web/"
 	@curl -sf "http://localhost:$${GEOSERVER_HOST_PORT:-8080}/geoserver/web/" > /dev/null && \
 		echo "✅ GeoServer is responding" || \
 		(echo "❌ GeoServer not reachable – is it running?"; exit 1)
@@ -141,144 +168,116 @@ health: which-env
 # -------------------------------------------------
 # Build
 # -------------------------------------------------
-build: which-env
+build: current-env
 	@echo "🐳 Building images (no cache) [$(ENV)]..."
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		build --no-cache
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) build --no-cache
 
-build-cache: which-env
+build-cache: current-env
 	@echo "🐳 Building images (with cache) [$(ENV)]..."
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		build
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) build
 
 # -------------------------------------------------
-# Up
+# Up / Start
 # -------------------------------------------------
 up: validate
 	@if [ "$(SERVICE)" = "geoserver" ]; then \
 		echo "🚀 Starting db + geoserver [$(ENV)]..."; \
-		$(COMPOSE) -f $(COMPOSE_FILE) up -d --build db geoserver; \
+		$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) up -d --build db geoserver; \
 	else \
 		echo "🚀 Starting $(SERVICE) [$(ENV)]..."; \
-		$(COMPOSE) -f $(COMPOSE_FILE) up -d --build $(SERVICE); \
+		$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) up -d --build $(SERVICE); \
 	fi
 
 up-all: validate
 	@echo "🚀 Starting db + geoserver [$(ENV)]..."
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		up -d --build db geoserver
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) up -d --build db geoserver
 
-start: which-env
+start: current-env
 	@echo "▶️  Starting containers [$(ENV)]..."
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		start
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) start
 
-stop: which-env
+stop: current-env
 	@echo "⏸️  Stopping containers [$(ENV)]..."
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		stop
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) stop
 
 # -------------------------------------------------
 # Down / Restart
 # -------------------------------------------------
-down: which-env
+down: current-env
 	@echo "🛑 Stopping + removing containers [$(ENV)]..."
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		down
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) down
 
 restart: down up
 
 # -------------------------------------------------
-# Inspection
+# Inspection (SERVICE defaults to geoserver)
 # -------------------------------------------------
-ps: which-env
+ps: current-env
 	@echo "📋 Container status [$(ENV)]:"
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		ps
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) ps
 
-logs: which-env
+logs: current-env
 	@echo "📜 Showing last 100 log lines for $(SERVICE) [$(ENV)]..."
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		logs --tail=100 $(SERVICE)
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) logs --tail=100 $(SERVICE)
 
-logs-follow: which-env
-	@echo "📜 Following logs for $(SERVICE) [$(ENV)] (Ctrl+C to stop)..."
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		logs -f $(SERVICE)
+logs-follow: current-env
+	@echo "📜 Following $(SERVICE) [$(ENV)] (Ctrl+C to stop)..."
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) logs -f $(SERVICE)
 
 # -------------------------------------------------
-# Rebuild
+# Rebuild (special handling for geoserver service)
 # -------------------------------------------------
 rebuild: validate
 	@echo "♻️  Rebuilding + restarting $(SERVICE) [$(ENV)]..."
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		build --no-cache
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) build --no-cache
 	@if [ "$(SERVICE)" = "geoserver" ]; then \
 		echo "🚀 Starting db + geoserver [$(ENV)] after rebuild..."; \
-		$(COMPOSE) -f $(COMPOSE_FILE) up -d db geoserver; \
+		$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) up -d db geoserver; \
 	else \
 		echo "🚀 Starting $(SERVICE) [$(ENV)] after rebuild..."; \
-		$(COMPOSE) -f $(COMPOSE_FILE) up -d $(SERVICE); \
+		$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) up -d $(SERVICE); \
 	fi
 
 # -------------------------------------------------
-# Volume cleanup (DANGEROUS)
+# Volume cleanup ⚠️ (DANGEROUS)
 # -------------------------------------------------
-rmVolumes: which-env
+rmVolumes: current-env
 	@echo "⚠️  Removing volumes [$(ENV)] – ALL DATA WILL BE LOST"
 	@read -p "Type 'yes' to confirm: " confirm && [ "$$confirm" = "yes" ] || (echo "Aborted"; exit 1)
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		down -v
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) down -v
 
 rmvolumes: rmVolumes
 
-clean: which-env
+clean: current-env
 	@echo "🧹 Full cleanup [$(ENV)] – removing containers, networks, volumes..."
-	$(COMPOSE) \
-		-f $(COMPOSE_FILE) \
-		down -v --remove-orphans
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) down -v --remove-orphans
 
 # -------------------------------------------------
-# Bootstrap env files
+# Bootstrap env files (NEVER overwrite existing)
 # -------------------------------------------------
 init-dev:
-	@if [ -f .env.dev ]; then \
-		echo "ℹ️  .env.dev already exists"; \
+	@if [ -f "$(CURDIR)/.env.dev" ]; then \
+		echo "ℹ️  $(CURDIR)/.env.dev already exists – not overwriting"; \
+		echo "💡 Edit it manually or remove it first to regenerate"; \
 	else \
-		cp env_dev_sample .env.dev && echo "✅ Created .env.dev"; \
+		cp $(CURDIR)/env_dev_sample $(CURDIR)/.env.dev && echo "✅ Created $(CURDIR)/.env.dev from template"; \
 	fi
 
 init-prod:
-	@if [ -f .env.prod ]; then \
-		echo "ℹ️  .env.prod already exists"; \
+	@if [ -f "$(CURDIR)/.env.prod" ]; then \
+		echo "ℹ️  $(CURDIR)/.env.prod already exists – not overwriting"; \
+		echo "💡 Edit it manually or remove it first to regenerate"; \
 	else \
-		cp env_prod_sample .env.prod && echo "✅ Created .env.prod"; \
+		cp $(CURDIR)/env_prod_sample $(CURDIR)/.env.prod && echo "✅ Created $(CURDIR)/.env.prod from template"; \
 	fi
 
 # -------------------------------------------------
 # Shell access
 # -------------------------------------------------
-shell-geoserver: which-env
+shell-geoserver: current-env
 	@echo "🐚 Opening shell in geoserver container [$(ENV)]..."
-	$(COMPOSE) \
-		--env-file $(ENV_FILE) \
-		-f $(COMPOSE_FILE) \
-		exec geoserver sh
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) exec geoserver sh
 
-shell-db: which-env
+shell-db: current-env
 	@echo "🐚 Opening shell in db container [$(ENV)]..."
-	$(COMPOSE) \
-		--env-file $(ENV_FILE) \
-		-f $(COMPOSE_FILE) \
-		exec db sh
+	$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) exec db sh
