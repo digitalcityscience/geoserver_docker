@@ -1,0 +1,15 @@
+.git
+.gitignore
+.docker-config/
+
+.env*
+geoserver_data/
+plugins/
+git_ignore/
+
+*.log
+__pycache__/
+.DS_Store
+*.swp
+*.swo
+*~
