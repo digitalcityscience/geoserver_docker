@@ -1,105 +1,143 @@
 ############################
-# GLOBAL
+# Global
 ############################
 COMPOSE_PROJECT_NAME=tosca_geoserver_dev
+ENV=dev
+PROD_MODE=false
 
 ############################
-# POSTGRES (Shared DB)
+# Core
 ############################
+# Main mode switch. Preferred values:
+# - default: file-backed users/roles/config
+# - jdbc-role: JDBC roles + file-backed users
+# - jdbc-auth-role: JDBC users + JDBC roles
+# - jdbc-config: advanced mode for JDBC config persistence
+GEOSERVER_VERSION=2.28.3
+GEOSERVER_HOST_PORT=8080
+GEOSERVER_CONTAINER_PORT=8080
+GEOSERVER_DATA_DIR=/geoserver_data/data
+GEOSERVER_SECURITY_MODE=default
+
+############################
+# Admin bootstrap
+############################
+GEOSERVER_ADMIN_USER=admin
+GEOSERVER_ADMIN_PASSWORD=change_me_dev
+GEOSERVER_DISABLE_DEFAULT_ADMIN=false
+
+############################
+# URLs and reverse proxy
+############################
+GEOSERVER_INTERNAL_URL=http://localhost:8080/geoserver
+GEOSERVER_PUBLIC_URL=
+PROXY_BASE_URL=
+GEOSERVER_USE_HEADERS_PROXY_URL=true
+
+############################
+# CORS and CSRF
+############################
+GEOSERVER_CORS_ENABLED=true
+GEOSERVER_CORS_ALLOWED_ORIGINS=*
+GEOSERVER_CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,HEAD,OPTIONS
+GEOSERVER_CORS_ALLOWED_HEADERS=*
+GEOSERVER_ALLOW_WILDCARD_CORS=true
+GEOSERVER_CSRF_WHITELIST=localhost,127.0.0.1
+GEOSERVER_CSRF_DISABLED=false
+
+############################
+# Plugins
+############################
+OFFICIAL_PLUGINS=gdal,monitor,vectortiles,mbstyle
+COMMUNITY_PLUGINS=sec-oidc
+BUILD_JDBC_PLUGINS=false
+
+############################
+# PostgreSQL ports
+############################
+POSTGRES_HOST_PORT=5438
+POSTGRES_CONTAINER_PORT=5432
+
+############################
+# JDBC optional
+############################
+# These toggles describe JDBC behavior.
+# In normal use, set GEOSERVER_SECURITY_MODE and keep these aligned with the mode:
+# - jdbc-role      => ROLE=true, AUTH=false, CONFIG=false
+# - jdbc-auth-role => ROLE=true, AUTH=true,  CONFIG=false
+# - jdbc-config    => ROLE=false,AUTH=false, CONFIG=true
+#
+# WARNING: Do not enable JDBC auth/config unless you are explicitly migrating
+# to those modes and have validated startup/recovery steps.
+GEOSERVER_ENABLE_JDBC_ROLE=false
+GEOSERVER_ENABLE_JDBC_AUTH=false
+GEOSERVER_ENABLE_JDBC_CONFIG=false
+# If false (recommended), jdbc-role prepares JDBC role service but keeps default
+# auth provider until explicit UI/script activation.
+GEOSERVER_JDBC_ROLE_AUTO_ACTIVATE=false
+GEOSERVER_JDBC_EXTRA_ROLES=
+GEOSERVER_JDBC_CONFIG_IMPORT=false
+
+############################
+# PostgreSQL shared database
+############################
+# IMPORTANT: keep PG_HOST=db unless you also change the docker-compose service name.
 PG_HOST=db
-PG_PORT=5438
 PG_DATABASE=tosca
-PG_DOCKER_PORT=5432
-
-# PostgreSQL superuser
 PG_SUPERUSER=postgres
 PG_SUPERPASS=postgres
 
 ############################
-# APPLICATION ROLES
+# Application database users
 ############################
-
-# Django (API)
 PG_API_USER=tosca_api
 PG_API_PASSWORD=postgres_api
-
-# GeoServer
 PG_GS_USER=tosca_gs
 PG_GS_PASSWORD=postgres_gs
 
 ############################
-# POSTGRES SCHEMAS
+# PostgreSQL schemas
 ############################
 PG_SCHEMA_API=api_schema
 PG_SCHEMA_GEOSERVER=gs_auth_role_schema
 PG_SCHEMA_GIS=gis_schema
 PG_SCHEMA_JDBCCONF=gs_jdbcconfig_schema
-############################
-# GEOSERVER CORE
-############################
-GEOSERVER_VERSION=2.27.2
-GEOSERVER_PORT=8080
-GEOSERVER_DATA_DIR=/geoserver_data/data
-
-GEOSERVER_ADMIN_USER=admin2
-GEOSERVER_ADMIN_PASSWORD=geoserver2
 
 ############################
-# GEOSERVER – JDBC BACKEND
+# JDBC backend compatibility
 ############################
+# Backend DB connection used by JDBC templates/scripts.
+# Keep these in sync with PostgreSQL settings above.
 GEOSERVER_DB_BACKEND=POSTGRES
 GEOSERVER_DB_HOST=${PG_HOST}
-GEOSERVER_DB_PORT=${PG_DOCKER_PORT}
+GEOSERVER_DB_PORT=${POSTGRES_CONTAINER_PORT}
 GEOSERVER_DB_NAME=${PG_DATABASE}
 GEOSERVER_DB_USER=${PG_GS_USER}
 GEOSERVER_DB_PASSWORD=${PG_GS_PASSWORD}
 GEOSERVER_DB_SCHEMA=${PG_SCHEMA_GEOSERVER}
+GS_JDBC_URL=jdbc:postgresql://${PG_HOST}:${POSTGRES_CONTAINER_PORT}/${PG_DATABASE}?currentSchema=${PG_SCHEMA_GEOSERVER}
 
-# JDBC URL (roles + jdbcconfig)
-GS_JDBC_URL=jdbc:postgresql://${PG_HOST}:${PG_DOCKER_PORT}/${PG_DATABASE}?currentSchema=${PG_SCHEMA_GEOSERVER}
+# Backward-compatible aliases used by existing JDBC templates/helper scripts.
+# WARNING: Do not rename/remove these aliases unless you also update the scripts.
+PG_PORT=${POSTGRES_HOST_PORT}
+PG_DOCKER_PORT=${POSTGRES_CONTAINER_PORT}
+ENABLE_JDBC_CONFIG=${GEOSERVER_ENABLE_JDBC_CONFIG}
+ENABLE_JDBC_LOGIN=${GEOSERVER_ENABLE_JDBC_AUTH}
+# Service names referenced by security templates.
+# Change only if you intentionally renamed the service directories/configs.
+JDBC_LOGIN_SERVICE_NAME=jdbc_login
+JDBC_AUTH_SERVICE_NAME=jdbc_auth
 
 ############################
-# GEOSERVER – ROLE SERVICE
+# JDBC role service
 ############################
 GS_ROLE_SERVICE_NAME=jdbc_role
 GS_ADMIN_ROLE=ADMIN
 GS_GROUP_ADMIN_ROLE=GROUP_ADMIN
 
 ############################
-# GEOSERVER – JVM
+# JVM and optional features
 ############################
 GEOSERVER_JVM_XMS=1G
 GEOSERVER_JVM_XMX=2G
-
-############################
-# GEOSERVER – PLUGINS
-#  When you add new plugin, it will be installed automatically on GeoServer startup but it will take while for first startup.
-#  !!!    so be patient !!!!
-# or if you need one of the plugins for your project, please add it github action settings and publish your own image.
-# You will save time for every new startup.
-############################
-
-OFFICIAL_PLUGINS=gdal,monitor,vectortiles,mbstyle
-COMMUNITY_PLUGINS=jdbcconfig,jdbcstore,sec-oauth2-openid-connect
-
-############################
-# GEOSERVER – JDBC CONFIG
-ENABLE_JDBC_CONFIG=true
-ENABLE_JDBC_LOGIN=true
-JDBC_LOGIN_SERVICE_NAME=jdbc_login
-JDBC_AUTH_SERVICE_NAME=jdbc_auth
-
-
-############################
-# GEOSERVER – CORS
-############################
-GEOSERVER_CORS_ENABLED=true
-GEOSERVER_CORS_ALLOWED_ORIGINS=*
-GEOSERVER_CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,HEAD,OPTIONS
-GEOSERVER_CORS_ALLOWED_HEADERS=*
-
-############################
-# GEOSERVER – OPTIONAL
-############################
 DISK_QUOTA_ENABLED=false
-

@@ -10,7 +10,6 @@ services:
       POSTGRES_USER: ${PG_SUPERUSER}
       POSTGRES_PASSWORD: ${PG_SUPERPASS}
 
-      # initdb script'lerin kullanıyorsa bunları da geçiyoruz:
       PG_API_USER: ${PG_API_USER}
       PG_API_PASSWORD: ${PG_API_PASSWORD}
       PG_GS_USER: ${PG_GS_USER}
@@ -19,7 +18,7 @@ services:
       PG_SCHEMA_GEOSERVER: ${PG_SCHEMA_GEOSERVER}
       PG_SCHEMA_GIS: ${PG_SCHEMA_GIS}
     ports:
-      - "${PG_PORT}:5432"
+      - "${POSTGRES_HOST_PORT:-5438}:${POSTGRES_CONTAINER_PORT:-5432}"
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./docker/initdb:/docker-entrypoint-initdb.d
@@ -27,7 +26,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U ${PG_SUPERUSER} -d ${PG_DATABASE} -h 127.0.0.1 -p 5432",
+          "pg_isready -U ${PG_SUPERUSER} -d ${PG_DATABASE} -h 127.0.0.1 -p ${POSTGRES_CONTAINER_PORT:-5432}",
         ]
       interval: 5s
       timeout: 3s
@@ -43,21 +42,30 @@ services:
         # - linux/amd64 # Intel/AMD (CI, servers) – enable for x86_64 builds
       args:
         GEOSERVER_VERSION: ${GEOSERVER_VERSION}
+        BUILD_JDBC_PLUGINS: ${BUILD_JDBC_PLUGINS:-false}
     image: dcs-geoserver:${GEOSERVER_VERSION} #dev purpose local image name
     container_name: tosca-geoserver
     env_file:
       - .env.dev
+    environment:
+      GEOSERVER_SECURITY_MODE: ${GEOSERVER_SECURITY_MODE:-default}
+      GEOSERVER_ENABLE_JDBC_ROLE: ${GEOSERVER_ENABLE_JDBC_ROLE:-false}
+      GEOSERVER_ENABLE_JDBC_AUTH: ${GEOSERVER_ENABLE_JDBC_AUTH:-false}
+      GEOSERVER_ENABLE_JDBC_CONFIG: ${GEOSERVER_ENABLE_JDBC_CONFIG:-false}
+      GEOSERVER_JDBC_EXTRA_ROLES: ${GEOSERVER_JDBC_EXTRA_ROLES:-}
+      GEOSERVER_JDBC_CONFIG_IMPORT: ${GEOSERVER_JDBC_CONFIG_IMPORT:-false}
+      ENABLE_JDBC_LOGIN: ${ENABLE_JDBC_LOGIN:-false}
+      ENABLE_JDBC_CONFIG: ${ENABLE_JDBC_CONFIG:-false}
+      COMMUNITY_PLUGINS: ${COMMUNITY_PLUGINS:-sec-oidc}
+      BUILD_JDBC_PLUGINS: ${BUILD_JDBC_PLUGINS:-false}
     ports:
-      - "${GEOSERVER_PORT}:8080"
+      - "${GEOSERVER_HOST_PORT:-8080}:${GEOSERVER_CONTAINER_PORT:-8080}"
     volumes:
       - geoserver_data:/geoserver_data/data
       # - ./docker/geoserver-init:/geoserver-init:ro
-      - /Users/hsadmin:/mnt/home
-    depends_on:
-      db:
-        condition: service_healthy
+      - ./mnt:/mnt/home
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/geoserver/web"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:${GEOSERVER_CONTAINER_PORT:-8080}/geoserver/web"]
       interval: 10s
       timeout: 5s
       retries: 10

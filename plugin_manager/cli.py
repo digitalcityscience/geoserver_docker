@@ -16,7 +16,7 @@ def main():
         description="GeoServer plugin manager"
     )
 
-    parser.add_argument("--version", help="GeoServer version (e.g. 2.27.2)")
+    parser.add_argument("--version", help="GeoServer version (e.g. 2.28.3)")
     parser.add_argument("--community", help="Community plugins (comma-separated)")
     parser.add_argument("--official", help="Official plugins (comma-separated)")
     parser.add_argument("--dry-run", action="store_true")
@@ -24,7 +24,7 @@ def main():
 
     args = parser.parse_args()
 
-    # ENV fallback (Docker yolu)
+    # Environment fallback for Docker builds and runtime plugin installation.
     version = args.version or os.getenv("GEOSERVER_VERSION")
     community_raw = args.community or os.getenv("COMMUNITY_PLUGINS", "")
     official_raw = args.official or os.getenv("OFFICIAL_PLUGINS", "")
@@ -35,13 +35,10 @@ def main():
     community = parse_list(community_raw)
     official = parse_list(official_raw)
 
-    # 🔹 Context
     ctx = GeoServerContext(version=version)
 
-    # 🔹 Resolver (only knows URLs)
     resolver = PluginResolver(ctx)
 
-    # 🔹 Installer (only installs)
     if args.test_lib_dir:
         from pathlib import Path
         installer = PluginInstaller(
@@ -59,7 +56,6 @@ def main():
             print("OFFICIAL:", resolver.official(p))
         return
 
-    # 🔹 Orchestration happens here
     if community:
         installer.install_many(
             community,
@@ -72,7 +68,7 @@ def main():
             resolver.official
         )
 
-    print("🎉 Plugin setup complete")
+    print("Plugin setup complete")
 
 
 if __name__ == "__main__":

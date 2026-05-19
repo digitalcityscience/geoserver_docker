@@ -1,7 +1,7 @@
 <security>
   <roleServiceName>jdbc_role</roleServiceName>
   <authProviderNames>
-    <string>jdbc_auth</string>
+    <string>default</string>
     <!-- <string>default</string> -->
   </authProviderNames>
   <configPasswordEncrypterName>pbePasswordEncoder</configPasswordEncrypterName>

@@ -6,6 +6,9 @@ geoserver_data/
 plugins/
 git_ignore/
 
+# Ignore local Docker/buildx state
+.docker-config/
+
 # Ignore logs
 *.log
 
