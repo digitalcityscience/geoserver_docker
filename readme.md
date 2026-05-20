@@ -102,12 +102,13 @@ make current-env && make ps && make health
 
 ---
 
-## ⚙️ Only 5 Settings You Need to Change
+## ⚙️ Only 6 Settings You Need to Change
 
 Edit these in `.env.dev` or `.env.prod`:
 
 | Variable | Example | What it does |
 |----------|---------|-------------|
+| `GEOSERVER_ADMIN_USER` | `admin2` | Sets the final GeoServer admin user |
 | `GEOSERVER_ADMIN_PASSWORD` | `MySecurePass!2024` | Sets the admin password (**change this!**) |
 | `GEOSERVER_PUBLIC_URL` | `https://maps.yourcompany.com/geoserver` | The URL users see in their browser |
 | `PROXY_BASE_URL` | `https://maps.yourcompany.com/geoserver` | Base URL for all generated links (WMS, REST, etc.) |
@@ -115,6 +116,8 @@ Edit these in `.env.dev` or `.env.prod`:
 | `GEOSERVER_SECURITY_MODE` | `default` | How GeoServer stores config (`default`, `jdbc-role`, etc.) |
 
 > ✅ All other settings have safe defaults. Leave them alone until you need them.
+
+When `GEOSERVER_ADMIN_USER` is changed from `admin`, the container creates that user during first startup and disables the built-in `admin` account by default. This happens in the normal file-backed mode too; JDBC security is not required for the configured admin user to become the only admin.
 
 ---
 

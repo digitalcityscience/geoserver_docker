@@ -96,10 +96,10 @@ def wait_for_rest(base_url: str, timeout_seconds: int, poll_seconds: int) -> boo
     while time.monotonic() < deadline:
         configured_user = env("GEOSERVER_ADMIN_USER", DEFAULT_ADMIN_USER)
         configured_password = env("GEOSERVER_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
-        for user, password in (
-            (configured_user, configured_password),
-            (DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD),
-        ):
+        candidates = [(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD)]
+        if configured_user != DEFAULT_ADMIN_USER:
+            candidates.append((configured_user, configured_password))
+        for user, password in candidates:
             status = rest_status(base_url, user, password)
             if status in {200, 401, 403}:
                 print("GeoServer REST endpoint is reachable")
@@ -110,6 +110,18 @@ def wait_for_rest(base_url: str, timeout_seconds: int, poll_seconds: int) -> boo
 
 def credentials_work(base_url: str, user: str, password: str) -> bool:
     return rest_status(base_url, user, password) == 200
+
+
+def credentials_have_admin_access(base_url: str, user: str, password: str) -> bool:
+    return rest_status(base_url + "/rest/security/roles.xml", user, password) == 200
+
+
+def fallback_admin_has_access(base_url: str) -> bool:
+    for _ in range(3):
+        if credentials_have_admin_access(base_url, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD):
+            return True
+        time.sleep(2)
+    return False
 
 
 def update_own_password(base_url: str, auth_user: str, auth_password: str, new_password: str) -> bool:
@@ -248,7 +260,10 @@ def main() -> int:
     base_url = normalize_url(env("GEOSERVER_INTERNAL_URL", "http://localhost:8080/geoserver"))
     target_user = env("GEOSERVER_ADMIN_USER", DEFAULT_ADMIN_USER)
     target_password = env("GEOSERVER_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
-    disable_default_admin = parse_bool("GEOSERVER_DISABLE_DEFAULT_ADMIN")
+    disable_default_admin = parse_bool(
+        "GEOSERVER_DISABLE_DEFAULT_ADMIN",
+        default=target_user != DEFAULT_ADMIN_USER,
+    )
     timeout_seconds = int(env("GEOSERVER_READY_TIMEOUT_SECONDS", "180"))
     poll_seconds = int(env("GEOSERVER_READY_POLL_SECONDS", "5"))
 
@@ -260,11 +275,17 @@ def main() -> int:
     if not wait_for_rest(base_url, timeout_seconds, poll_seconds):
         return warn_or_fail("GeoServer REST did not become reachable for admin credential bootstrap")
 
-    if credentials_work(base_url, target_user, target_password):
+    if credentials_have_admin_access(base_url, target_user, target_password):
         print(f"GeoServer admin credentials are already configured for user '{target_user}'")
         return 0
 
-    if not credentials_work(base_url, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD):
+    if credentials_work(base_url, target_user, target_password):
+        print(
+            f"Configured GeoServer user '{target_user}' exists but does not have admin access; "
+            "trying first-boot fallback credentials to repair the role assignment"
+        )
+
+    if not fallback_admin_has_access(base_url):
         return warn_or_fail("Configured credentials and first-boot fallback credentials were both rejected")
 
     print("Applying GeoServer admin credentials with first-boot fallback credentials")

@@ -24,7 +24,9 @@ GEOSERVER_SECURITY_MODE=default
 ############################
 GEOSERVER_ADMIN_USER=admin
 GEOSERVER_ADMIN_PASSWORD=change_me_prod
-GEOSERVER_DISABLE_DEFAULT_ADMIN=false
+# Optional override. If unset, the built-in admin user is disabled automatically
+# when GEOSERVER_ADMIN_USER is changed from "admin".
+# GEOSERVER_DISABLE_DEFAULT_ADMIN=false
 
 ############################
 # URLs and reverse proxy

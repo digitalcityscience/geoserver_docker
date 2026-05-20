@@ -38,6 +38,7 @@ Startup behavior:
 - Required role tables are created in `PG_SCHEMA_GEOSERVER` when missing.
 - `GS_ADMIN_ROLE`, `GS_GROUP_ADMIN_ROLE`, and optional `GEOSERVER_JDBC_EXTRA_ROLES` are seeded.
 - `GEOSERVER_ADMIN_USER` is mapped to `GS_ADMIN_ROLE`.
+- If `GEOSERVER_ADMIN_USER` is changed from `admin`, the built-in `admin` user is disabled by default after the configured admin user is created.
 - `security/config.xml` is updated so `roleServiceName` points to the JDBC role service.
 - GeoServer is reloaded and REST credentials are checked after the role switch.
 
@@ -77,7 +78,7 @@ Startup behavior:
 - Required user/group tables are created when missing.
 - GeoServer is reloaded while file-backed admin credentials are still active so the JDBC user/group service is discoverable through REST.
 - `GEOSERVER_ADMIN_USER` is created or updated through the GeoServer REST API in the JDBC user/group service. This lets GeoServer encode the password instead of writing plaintext SQL.
-- Role seed and admin role mapping are verified in PostgreSQL.
+- Role seed and admin role mappings are verified in PostgreSQL.
 - Only after the JDBC services and admin user are verified, `security/config.xml` is updated to use:
   - `roleServiceName=${GS_ROLE_SERVICE_NAME}`
   - `authProviderNames=${JDBC_AUTH_SERVICE_NAME}`
