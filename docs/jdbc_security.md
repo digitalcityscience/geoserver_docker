@@ -1,22 +1,22 @@
 # JDBC Security Asset Ownership
 
-The Phase 2 cleanup keeps the existing JDBC assets and assigns them to explicit runtime modes. This avoids duplicating the current JDBC implementation while making the future split easier to review.
+The JDBC assets are owned by explicit feature flags. `GEOSERVER_SECURITY_MODE` can still be used as a preset, but `GEOSERVER_ENABLE_JDBC_ROLE`, `GEOSERVER_ENABLE_JDBC_AUTH`, and `GEOSERVER_ENABLE_JDBC_CONFIG` are the source of truth.
 
 ## Assets
 
-| Path | Owner mode | Notes |
+| Path | Owner feature | Notes |
 | --- | --- | --- |
-| `docker/geoserver-init/jdbc_role_service/jdbc_role/config.xml.template` | `jdbc-role`, `jdbc-auth-role` | Primary JDBC role service template. |
-| `docker/geoserver-init/jdbc_role_service/jdbc_role/rolesddl.xml` | `jdbc-role`, `jdbc-auth-role` | Role schema definition. |
-| `docker/geoserver-init/jdbc_role_service/jdbc_role/rolesdml.xml` | `jdbc-role`, `jdbc-auth-role` | Role seed data. |
-| `docker/geoserver-init/jdbc_login_service/jdbc_login/config.xml.template` | `jdbc-auth-role` | JDBC user/group service template. |
-| `docker/geoserver-init/jdbc_login_service/jdbc_login/usersddl.xml` | `jdbc-auth-role` | User/group schema definition. |
-| `docker/geoserver-init/jdbc_login_service/jdbc_login/usersdml.xml` | `jdbc-auth-role` | User/group seed data. |
-| `docker/geoserver-init/auth/jdbc_auth/config.xml.template` | `jdbc-auth-role` | JDBC authentication provider template. |
-| `docker/geoserver-init/security/config.xml.template` | `jdbc-auth-role` source material | Existing full security template assumes JDBC auth and must not be used as default mode config. |
+| `docker/geoserver-init/jdbc_role_service/jdbc_role/config.xml.template` | `GEOSERVER_ENABLE_JDBC_ROLE` | Primary JDBC role service template. |
+| `docker/geoserver-init/jdbc_role_service/jdbc_role/rolesddl.xml` | `GEOSERVER_ENABLE_JDBC_ROLE` | Role schema definition. |
+| `docker/geoserver-init/jdbc_role_service/jdbc_role/rolesdml.xml` | `GEOSERVER_ENABLE_JDBC_ROLE` | Role seed data. |
+| `docker/geoserver-init/jdbc_login_service/jdbc_login/config.xml.template` | `GEOSERVER_ENABLE_JDBC_AUTH` | JDBC user/group service template. |
+| `docker/geoserver-init/jdbc_login_service/jdbc_login/usersddl.xml` | `GEOSERVER_ENABLE_JDBC_AUTH` | User/group schema definition. |
+| `docker/geoserver-init/jdbc_login_service/jdbc_login/usersdml.xml` | `GEOSERVER_ENABLE_JDBC_AUTH` | User/group seed data. |
+| `docker/geoserver-init/auth/jdbc_auth/config.xml.template` | `GEOSERVER_ENABLE_JDBC_AUTH` | JDBC authentication provider template. |
+| `docker/geoserver-init/security/config.xml.template` | JDBC auth switch | Used when activating JDBC auth provider. |
 | `scripts/activate_jdbcS_settings.sh` | compatibility wrapper | Keep temporarily, then split into smaller mode-specific helpers. |
 | `docker/initdb/init001.sh` | JDBC-enabled compose variants | PostgreSQL schema/user bootstrap. |
-| `docker/geoserver-init/jdbcConfig/activate_jdbcConfig.sh` | `jdbc-config` | Advanced catalog backend activation. |
+| `docker/geoserver-init/jdbcConfig/activate_jdbcConfig.sh` | `GEOSERVER_ENABLE_JDBC_CONFIG` | Advanced catalog backend activation. |
 | `docker/geoserver-init/jdbcConfig/activate_jdbcStore.sh` | future advanced mode | Keep present but do not run by default. |
 
 ## Cleanup Notes
@@ -26,9 +26,9 @@ The Phase 2 cleanup keeps the existing JDBC assets and assigns them to explicit 
 - Do not create another all-in-one JDBC activation script.
 - Keep `jdbc-role` as the first JDBC mode to implement because it has the smallest blast radius.
 
-## Phase 10: JDBC Role Mode
+## JDBC Role Feature
 
-`jdbc-role` keeps GeoServer users and groups in the default file-backed XML service and activates only the JDBC role service.
+`GEOSERVER_ENABLE_JDBC_ROLE=true` keeps GeoServer users and groups in the default file-backed XML service and activates only the JDBC role service.
 
 Startup behavior:
 
@@ -45,7 +45,6 @@ Startup behavior:
 Run example:
 
 ```bash
-GEOSERVER_SECURITY_MODE=jdbc-role \
 GEOSERVER_ENABLE_JDBC_ROLE=true \
 docker-compose --env-file .env.dev -f docker-compose-dev.yml up -d --build db geoserver
 ```
@@ -64,13 +63,13 @@ Rollback:
 - Restart GeoServer.
 - File-backed users remain in place because `jdbc-role` does not replace the default user/group service.
 
-## Phase 11: JDBC Auth + Role Mode
+## JDBC Auth + Role Feature
 
-`jdbc-auth-role` stores GeoServer users/groups and roles in PostgreSQL. It still keeps the GeoServer catalog/config file-backed and does not enable JDBCConfig/JDBCStore.
+`GEOSERVER_ENABLE_JDBC_AUTH=true` stores GeoServer users/groups in PostgreSQL. Role support is also required, so auth implies `GEOSERVER_ENABLE_JDBC_ROLE=true`. It still keeps the GeoServer catalog/config file-backed and does not enable JDBCConfig/JDBCStore.
 
 Startup behavior:
 
-- The Phase 10 JDBC role service bootstrap still runs.
+- The JDBC role service bootstrap still runs.
 - `scripts/geoserver_configure_jdbc_security.py` also renders:
   - `docker/geoserver-init/jdbc_login_service/jdbc_login/config.xml.template`
   - `docker/geoserver-init/auth/jdbc_auth/config.xml.template`
@@ -87,7 +86,6 @@ Startup behavior:
 Run example:
 
 ```bash
-GEOSERVER_SECURITY_MODE=jdbc-auth-role \
 GEOSERVER_ENABLE_JDBC_ROLE=true \
 GEOSERVER_ENABLE_JDBC_AUTH=true \
 docker-compose --env-file .env.dev -f docker-compose-dev.yml up -d --build db geoserver
@@ -104,16 +102,16 @@ Rollback:
 
 - Preferred safe rollback for a test deployment is to set `GEOSERVER_SECURITY_MODE=default`, set all JDBC flags to `false`, and recreate the GeoServer data volume from a known-good backup or fresh default-mode boot.
 - If you need to keep the existing volume, restore `GEOSERVER_DATA_DIR/security/config.xml` so `roleServiceName` points to `default` and `authProviderNames` contains the default provider before restarting.
-- Keep PostgreSQL schemas intact until default REST login has been verified; they can be reused when returning to `jdbc-auth-role`.
+- Keep PostgreSQL schemas intact until default REST login has been verified; they can be reused when returning to JDBC auth.
 
-## Phase 12: JDBCConfig Mode
+## JDBCConfig Feature
 
-`jdbc-config` is an advanced catalog/config mode. It is not a security mode and it should not be enabled just to get JDBC roles or JDBC users.
+`GEOSERVER_ENABLE_JDBC_CONFIG=true` is an advanced catalog/config feature. It is not a security feature and it should not be enabled just to get JDBC roles or JDBC users.
 
 Startup behavior:
 
-- `GEOSERVER_SECURITY_MODE=jdbc-config` forces `GEOSERVER_ENABLE_JDBC_CONFIG=true` in the entrypoint.
-- `scripts/geoserver_configure_jdbc_config.py` only runs in `jdbc-config` mode.
+- `GEOSERVER_SECURITY_MODE=jdbc-config` is only a preset that forces `GEOSERVER_ENABLE_JDBC_CONFIG=true`.
+- `scripts/geoserver_configure_jdbc_config.py` runs when `GEOSERVER_ENABLE_JDBC_CONFIG=true`.
 - `PG_SCHEMA_JDBCCONF` is required and must be different from `PG_SCHEMA_GEOSERVER`.
 - The script updates `GEOSERVER_DATA_DIR/jdbcconfig/jdbcconfig.properties`.
 - `enabled=true`, `initdb=true`, and the PostgreSQL JDBC URL are written idempotently.
@@ -123,10 +121,8 @@ Startup behavior:
 Run example:
 
 ```bash
-GEOSERVER_SECURITY_MODE=jdbc-config \
 GEOSERVER_ENABLE_JDBC_CONFIG=true \
 ENABLE_JDBC_CONFIG=true \
-COMMUNITY_PLUGINS=sec-oidc,jdbcconfig \
 docker-compose --env-file .env.dev -f docker-compose-dev.yml up -d --build db geoserver
 ```
 
@@ -143,4 +139,4 @@ Migration notes:
 - Back up the GeoServer data volume and PostgreSQL database before enabling `jdbc-config`.
 - Enable `jdbc-config` only in a test deployment first.
 - Treat `global.xml` as possibly non-authoritative after JDBCConfig is enabled.
-- Roll back by restoring the file-backed data volume backup and setting `GEOSERVER_SECURITY_MODE=default`, `GEOSERVER_ENABLE_JDBC_CONFIG=false`, and `ENABLE_JDBC_CONFIG=false`.
+- Roll back by restoring the file-backed data volume backup and setting `GEOSERVER_ENABLE_JDBC_CONFIG=false` and `ENABLE_JDBC_CONFIG=false`.

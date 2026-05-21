@@ -8,11 +8,9 @@ PROD_MODE=true
 ############################
 # Core
 ############################
-# Main mode switch. Preferred values:
-# - default: file-backed users/roles/config
-# - jdbc-role: JDBC roles + file-backed users
-# - jdbc-auth-role: JDBC users + JDBC roles
-# - jdbc-config: advanced mode for JDBC config persistence
+# Optional preset. The GEOSERVER_ENABLE_JDBC_* flags below are the source of truth.
+# Presets only force matching flags on; they do not make the three JDBC features
+# the same thing.
 GEOSERVER_VERSION=2.28.3
 GEOSERVER_HOST_PORT=8080
 GEOSERVER_CONTAINER_PORT=8080
@@ -68,14 +66,11 @@ POSTGRES_CONTAINER_PORT=5432
 ############################
 # JDBC optional
 ############################
-# These toggles describe JDBC behavior.
-# In normal use, set GEOSERVER_SECURITY_MODE and keep these aligned with the mode:
-# - jdbc-role      => ROLE=true, AUTH=false, CONFIG=false
-# - jdbc-auth-role => ROLE=true, AUTH=true,  CONFIG=false
-# - jdbc-config    => ROLE=false,AUTH=false, CONFIG=true
-#
-# WARNING: Do not enable JDBC auth/config in production unless you are explicitly
-# migrating to those modes and have validated startup/recovery steps.
+# These toggles control independent JDBC features:
+# - ROLE: role definitions and user->role mappings in PostgreSQL.
+# - AUTH: users/groups/auth provider in PostgreSQL. Implies ROLE.
+# - CONFIG: advanced JDBCConfig catalog/config backend.
+# Enable only the features you intend to run in production.
 GEOSERVER_ENABLE_JDBC_ROLE=false
 GEOSERVER_ENABLE_JDBC_AUTH=false
 GEOSERVER_ENABLE_JDBC_CONFIG=false

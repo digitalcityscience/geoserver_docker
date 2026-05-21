@@ -41,26 +41,41 @@ GS_URL="${GS_URL:-http://localhost:8080/geoserver}"
 ADMIN_USER="${GEOSERVER_ADMIN_USER:-admin}"
 ADMIN_PASS="${GEOSERVER_ADMIN_PASSWORD:-geoserver}"
 SECURITY_MODE="${GEOSERVER_SECURITY_MODE:-default}"
+BOOTSTRAP_AUTH_USER="${GEOSERVER_ADMIN_USER:-admin}"
+BOOTSTRAP_AUTH_PASS="${GEOSERVER_ADMIN_PASSWORD:-geoserver}"
+
+MODE_ENABLE_ROLE="${GEOSERVER_ENABLE_JDBC_ROLE:-false}"
+MODE_ENABLE_AUTH="${GEOSERVER_ENABLE_JDBC_AUTH:-false}"
+MODE_ENABLE_CONFIG="${GEOSERVER_ENABLE_JDBC_CONFIG:-false}"
 
 case "$SECURITY_MODE" in
   jdbc-role)
     MODE_ENABLE_ROLE=true
-    MODE_ENABLE_AUTH=false
-    SECURITY_AUTH_PROVIDER_NAME="default"
     ;;
   jdbc-auth-role)
     MODE_ENABLE_ROLE=true
     MODE_ENABLE_AUTH=true
-    SECURITY_AUTH_PROVIDER_NAME="${JDBC_AUTH_SERVICE_NAME:-jdbc_auth}"
+    ;;
+  jdbc-config)
+    MODE_ENABLE_CONFIG=true
+    ;;
+  default|"")
     ;;
   *)
-    MODE_ENABLE_ROLE=false
-    MODE_ENABLE_AUTH=false
-    SECURITY_AUTH_PROVIDER_NAME="default"
+    echo "❌ GEOSERVER_SECURITY_MODE must be default, jdbc-role, jdbc-auth-role, or jdbc-config"
+    echo "   Current GEOSERVER_SECURITY_MODE=$SECURITY_MODE"
+    exit 1
     ;;
 esac
 
-# jdbc-auth-role always performs the full auth provider switch in a single run.
+if [ "$MODE_ENABLE_AUTH" = true ]; then
+  MODE_ENABLE_ROLE=true
+  SECURITY_AUTH_PROVIDER_NAME="${JDBC_AUTH_SERVICE_NAME:-jdbc_auth}"
+else
+  SECURITY_AUTH_PROVIDER_NAME="default"
+fi
+
+# JDBC auth always performs the full auth provider switch in a single run.
 # There is no staged mode: the admin user is created in the DB via REST while
 # file-based login is still active, then the JDBC auth provider is activated.
 APPLY_JDBC_AUTH_PROVIDER=false
@@ -68,19 +83,18 @@ if [ "$MODE_ENABLE_AUTH" = true ]; then
   APPLY_JDBC_AUTH_PROVIDER=true
 fi
 
-if [ "${GEOSERVER_ENABLE_JDBC_CONFIG:-false}" = "true" ] || [ "$SECURITY_MODE" = "jdbc-config" ]; then
-  MODE_ENABLE_CONFIG=true
-else
-  MODE_ENABLE_CONFIG=false
-fi
-
 echo "🧭 Using compose file: $COMPOSE_FILE"
 echo "🔐 Security mode: $SECURITY_MODE"
+echo "🎚️  JDBC toggles: role=$MODE_ENABLE_ROLE auth=$MODE_ENABLE_AUTH config=$MODE_ENABLE_CONFIG"
 echo "🔑 Security auth provider in config: $SECURITY_AUTH_PROVIDER_NAME"
 if [ "$MODE_ENABLE_AUTH" = true ]; then
   echo "🧩 Flow: role+auth (jdbc_role + jdbc_login + jdbc_auth)"
-else
+elif [ "$MODE_ENABLE_ROLE" = true ]; then
   echo "🧩 Flow: role-only (jdbc_role)"
+elif [ "$MODE_ENABLE_CONFIG" = true ]; then
+  echo "🧩 Flow: config-only (JDBCConfig)"
+else
+  echo "🧩 Flow: none"
 fi
 
 
@@ -142,6 +156,7 @@ render() {
 
 echo "🧩 Rendering templates"
 
+if [ "$MODE_ENABLE_ROLE" = true ]; then
 ############################################
 # JDBC ROLE operations
 ############################################
@@ -435,8 +450,6 @@ SQL
 ############################################
 # 7️⃣ Create admin user via REST (FIXED)
 ############################################
-BOOTSTRAP_AUTH_USER="${GEOSERVER_ADMIN_USER:-admin}"
-BOOTSTRAP_AUTH_PASS="${GEOSERVER_ADMIN_PASSWORD:-geoserver}"
 
 ############################################
 # JDBC AUTH operations
@@ -561,6 +574,9 @@ WHERE username = '${ADMIN_USER}'
   AND rolename = 'ADMIN';
 SQL
 fi
+else
+  echo "ℹ️  JDBC role/auth activation skipped"
+fi
 
 ############################################
 # 9️⃣ Activate JDBCConfig
@@ -628,23 +644,24 @@ while true; do
   fi
 done
 
-if [ "$MODE_ENABLE_AUTH" = true ]; then
-  echo "🔍 Running JDBC ROLE + JDBC AUTH validation..."
-else
-  echo "🔍 Running JDBC ROLE validation..."
-fi
-if [ "$MODE_ENABLE_AUTH" = true ]; then
-  JDBC_VALIDATE_SCOPE="auto"
-else
-  JDBC_VALIDATE_SCOPE="role"
-fi
+if [ "$MODE_ENABLE_ROLE" = true ]; then
+  if [ "$MODE_ENABLE_AUTH" = true ]; then
+    echo "🔍 Running JDBC ROLE + JDBC AUTH validation..."
+    JDBC_VALIDATE_SCOPE="auto"
+  else
+    echo "🔍 Running JDBC ROLE validation..."
+    JDBC_VALIDATE_SCOPE="role"
+  fi
 
-if ! docker compose -f "$COMPOSE_FILE" exec \
-  -e JDBC_VALIDATE_SCOPE="$JDBC_VALIDATE_SCOPE" \
-  -e JDBC_VALIDATE_REQUIRE_ACTIVE_ROLE=false \
-  geoserver python3 /scripts/geoserver_validate_jdbc.py; then
-  echo "❌ JDBC validation failed"
-  exit 1
+  if ! docker compose -f "$COMPOSE_FILE" exec \
+    -e JDBC_VALIDATE_SCOPE="$JDBC_VALIDATE_SCOPE" \
+    -e JDBC_VALIDATE_REQUIRE_ACTIVE_ROLE=false \
+    geoserver python3 /scripts/geoserver_validate_jdbc.py; then
+    echo "❌ JDBC validation failed"
+    exit 1
+  fi
+else
+  echo "ℹ️  JDBC role/auth validation skipped"
 fi
 
 echo ""

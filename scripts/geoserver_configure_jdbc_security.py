@@ -52,6 +52,14 @@ def parse_bool(name: str, default: bool = False) -> bool:
     raise JdbcSecurityError(f"{name} must be a boolean value, got {raw!r}")
 
 
+def jdbc_role_enabled(mode: str) -> bool:
+    return parse_bool("GEOSERVER_ENABLE_JDBC_ROLE", mode in JDBC_ROLE_MODES) or mode in JDBC_ROLE_MODES
+
+
+def jdbc_auth_enabled(mode: str) -> bool:
+    return parse_bool("GEOSERVER_ENABLE_JDBC_AUTH", mode == JDBC_AUTH_MODE) or mode == JDBC_AUTH_MODE
+
+
 def parse_list(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
@@ -402,6 +410,15 @@ def escape_xml(value: str) -> str:
 
 def configure_jdbc_security() -> None:
     mode = env("GEOSERVER_SECURITY_MODE", "default")
+    enable_role = jdbc_role_enabled(mode)
+    enable_auth = jdbc_auth_enabled(mode)
+    if enable_auth:
+        enable_role = True
+
+    if not enable_role:
+        print("JDBC security configuration skipped because GEOSERVER_ENABLE_JDBC_ROLE=false")
+        return
+
     data_dir = Path(env("GEOSERVER_DATA_DIR", "/geoserver_data/data"))
     init_dir = Path(env("GEOSERVER_INIT_DIR", "/geoserver-init"))
     role_service_name = env("GS_ROLE_SERVICE_NAME", "jdbc_role")
@@ -415,7 +432,7 @@ def configure_jdbc_security() -> None:
     render_jdbc_role_service(data_dir, init_dir, role_service_name)
     ensure_role_tables_and_seed(admin_user, admin_role, group_admin_role)
 
-    if mode == JDBC_AUTH_MODE:
+    if enable_auth:
         user_group_service_name = env("JDBC_LOGIN_SERVICE_NAME", "jdbc_login")
         auth_provider_name = env("JDBC_AUTH_SERVICE_NAME", "jdbc_auth")
         render_jdbc_auth_services(data_dir, init_dir, user_group_service_name, auth_provider_name)
@@ -446,7 +463,7 @@ def configure_jdbc_security() -> None:
     validate_rest_credentials(base_url, admin_user, admin_password)
     validate_role_seed(admin_user, admin_role)
 
-    if mode == JDBC_AUTH_MODE:
+    if enable_auth:
         print(f"JDBC auth + role services configured: {env('JDBC_LOGIN_SERVICE_NAME', 'jdbc_login')} / {role_service_name}")
     else:
         print(f"JDBC role service configured and activated: {role_service_name}")
@@ -454,8 +471,12 @@ def configure_jdbc_security() -> None:
 
 def main() -> int:
     mode = env("GEOSERVER_SECURITY_MODE", "default")
-    if mode not in JDBC_ROLE_MODES:
-        print(f"JDBC security configuration skipped for GEOSERVER_SECURITY_MODE={mode}")
+    if mode not in {"default", "jdbc-role", "jdbc-auth-role", "jdbc-config"}:
+        print(f"JDBC security configuration failed: unsupported GEOSERVER_SECURITY_MODE={mode}", file=sys.stderr)
+        return 1
+
+    if not jdbc_role_enabled(mode) and not jdbc_auth_enabled(mode):
+        print("JDBC security configuration skipped because JDBC role/auth flags are disabled")
         return 0
 
     try:

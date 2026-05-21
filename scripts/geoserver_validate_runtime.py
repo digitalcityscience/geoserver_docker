@@ -90,32 +90,44 @@ def collect_errors() -> list[str]:
     except ValueError as exc:
         return [str(exc)]
 
-    expected = expected_flags(mode)
-    for name, expected_value in expected.items():
-        if flags[name] != expected_value:
-            errors.append(f"{name} must be {str(expected_value).lower()} when GEOSERVER_SECURITY_MODE={mode}")
-
     if flags["ENABLE_JDBC_LOGIN"] != flags["GEOSERVER_ENABLE_JDBC_AUTH"]:
         errors.append("ENABLE_JDBC_LOGIN must match GEOSERVER_ENABLE_JDBC_AUTH during the compatibility period")
 
     if flags["ENABLE_JDBC_CONFIG"] != flags["GEOSERVER_ENABLE_JDBC_CONFIG"]:
         errors.append("ENABLE_JDBC_CONFIG must match GEOSERVER_ENABLE_JDBC_CONFIG during the compatibility period")
 
+    mode_presets = expected_flags(mode)
+    for name, preset_value in mode_presets.items():
+        if preset_value:
+            flags[name] = True
+
+    if flags["GEOSERVER_ENABLE_JDBC_AUTH"]:
+        flags["GEOSERVER_ENABLE_JDBC_ROLE"] = True
+
     runtime_community = parse_list(env("COMMUNITY_PLUGINS"))
     available_community = runtime_community | image_community_plugins()
     selected_jdbc_plugins = runtime_community & JDBC_PLUGINS
 
-    if mode == "default" and selected_jdbc_plugins:
+    jdbc_enabled = any(
+        flags[name]
+        for name in (
+            "GEOSERVER_ENABLE_JDBC_ROLE",
+            "GEOSERVER_ENABLE_JDBC_AUTH",
+            "GEOSERVER_ENABLE_JDBC_CONFIG",
+        )
+    )
+
+    if not jdbc_enabled and selected_jdbc_plugins:
         errors.append(
             "default mode must not request JDBC community plugins: "
             + ", ".join(sorted(selected_jdbc_plugins))
         )
 
-    if mode == "jdbc-config" and "jdbcconfig" not in available_community:
+    if flags["GEOSERVER_ENABLE_JDBC_CONFIG"] and "jdbcconfig" not in available_community:
         errors.append("jdbc-config mode requires the jdbcconfig community plugin in the image or COMMUNITY_PLUGINS")
 
-    if mode in {"jdbc-role", "jdbc-auth-role", "jdbc-config"}:
-        collect_jdbc_environment_errors(mode, errors)
+    if jdbc_enabled:
+        collect_jdbc_environment_errors(flags, errors)
 
     collect_proxy_errors(errors)
     collect_cors_csrf_errors(errors)
@@ -123,7 +135,7 @@ def collect_errors() -> list[str]:
     return errors
 
 
-def collect_jdbc_environment_errors(mode: str, errors: list[str]) -> None:
+def collect_jdbc_environment_errors(flags: dict[str, bool], errors: list[str]) -> None:
     required = {
         "PG_HOST": env("PG_HOST"),
         "PG_DATABASE": env("PG_DATABASE"),
@@ -136,24 +148,21 @@ def collect_jdbc_environment_errors(mode: str, errors: list[str]) -> None:
     }
     missing = [name for name, value in required.items() if not value]
     if missing:
-        errors.append(f"{mode} mode requires JDBC environment variables: {', '.join(missing)}")
+        errors.append(f"JDBC role/auth/config requires JDBC environment variables: {', '.join(missing)}")
 
-    if mode == "jdbc-role" and parse_bool("GEOSERVER_ENABLE_JDBC_AUTH"):
-        errors.append("jdbc-role mode must keep GEOSERVER_ENABLE_JDBC_AUTH=false")
-
-    if mode == "jdbc-auth-role":
+    if flags["GEOSERVER_ENABLE_JDBC_AUTH"]:
         auth_required = {
             "JDBC_LOGIN_SERVICE_NAME": env("JDBC_LOGIN_SERVICE_NAME", "jdbc_login"),
             "JDBC_AUTH_SERVICE_NAME": env("JDBC_AUTH_SERVICE_NAME", "jdbc_auth"),
         }
         missing_auth = [name for name, value in auth_required.items() if not value]
         if missing_auth:
-            errors.append(f"jdbc-auth-role mode requires auth environment variables: {', '.join(missing_auth)}")
+            errors.append(f"JDBC auth requires auth environment variables: {', '.join(missing_auth)}")
 
-    if mode == "jdbc-config":
+    if flags["GEOSERVER_ENABLE_JDBC_CONFIG"]:
         jdbc_config_schema = env("PG_SCHEMA_JDBCCONF")
         if not jdbc_config_schema:
-            errors.append("jdbc-config mode requires PG_SCHEMA_JDBCCONF")
+            errors.append("JDBC config requires PG_SCHEMA_JDBCCONF")
         elif jdbc_config_schema == env("PG_SCHEMA_GEOSERVER"):
             errors.append("PG_SCHEMA_JDBCCONF must be separate from PG_SCHEMA_GEOSERVER in jdbc-config mode")
 

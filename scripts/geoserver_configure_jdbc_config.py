@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Configure advanced GeoServer JDBCConfig mode.
 
-This script is intentionally narrow: it only runs for GEOSERVER_SECURITY_MODE=
-jdbc-config with GEOSERVER_ENABLE_JDBC_CONFIG=true. JDBCConfig owns catalog and
-some global settings, so default, jdbc-role, and jdbc-auth-role must never run
-this path.
+This script is intentionally narrow: it only runs when
+GEOSERVER_ENABLE_JDBC_CONFIG=true. JDBCConfig owns catalog and some global
+settings, so role/auth security setup remains separate.
 """
 
 from __future__ import annotations
@@ -149,14 +148,9 @@ def reload_geoserver() -> None:
 
 
 def main() -> int:
-    mode = env("GEOSERVER_SECURITY_MODE", "default")
-    if mode != "jdbc-config":
-        print(f"JDBCConfig skipped for GEOSERVER_SECURITY_MODE={mode}")
-        return 0
-
     if not parse_bool("GEOSERVER_ENABLE_JDBC_CONFIG"):
-        print("JDBCConfig configuration failed: GEOSERVER_ENABLE_JDBC_CONFIG must be true", file=sys.stderr)
-        return 1
+        print("JDBCConfig skipped because GEOSERVER_ENABLE_JDBC_CONFIG=false")
+        return 0
 
     try:
         configure_properties()

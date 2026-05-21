@@ -26,8 +26,9 @@
 ### Phase 1: Backend Setup (Makefile)
 ```bash
 # 1. Edit your .env.prod file
-GEOSERVER_SECURITY_MODE=jdbc-role
 GEOSERVER_ENABLE_JDBC_ROLE=true
+GEOSERVER_ENABLE_JDBC_AUTH=true
+GEOSERVER_ENABLE_JDBC_CONFIG=false
 
 # 2. Start GeoServer + PostgreSQL
 make up-all ENV=prod
@@ -130,13 +131,20 @@ psql -U geoserver -d geoserver -c "SELECT COUNT(*) FROM gs_auth_role_schema.role
 
 ---
 
-## 🔧 Mode-Specific Setup (Makefile + UI)
+## 🔧 Feature-Specific Setup (Makefile + UI)
 
-### Enable `jdbc-role` (Roles in DB) – Recommended First Step
+`GEOSERVER_SECURITY_MODE` can be used as a preset, but the `GEOSERVER_ENABLE_JDBC_*` flags are the source of truth. The three feature flags are related but independent:
+
+- `GEOSERVER_ENABLE_JDBC_ROLE=true` prepares/activates JDBC role storage.
+- `GEOSERVER_ENABLE_JDBC_AUTH=true` prepares/activates JDBC users and auth provider. It also requires role support.
+- `GEOSERVER_ENABLE_JDBC_CONFIG=true` enables the advanced JDBCConfig catalog/config path.
+
+### Enable JDBC ROLE (Roles in DB) – Recommended First Step
 ```bash
 # .env.prod settings
-GEOSERVER_SECURITY_MODE=jdbc-role
 GEOSERVER_ENABLE_JDBC_ROLE=true
+GEOSERVER_ENABLE_JDBC_AUTH=false
+GEOSERVER_ENABLE_JDBC_CONFIG=false
 
 # Backend
 make up-all ENV=prod
@@ -145,12 +153,12 @@ ENV_FILE=.env.prod ./scripts/activate_jdbcS_settings.sh
 # THEN: Complete Phase 2 UI Activation above
 ```
 
-### Enable `jdbc-auth-role` (Users + Roles in DB)
+### Enable JDBC AUTH + ROLE (Users + Roles in DB)
 ```bash
 # .env.prod settings
-GEOSERVER_SECURITY_MODE=jdbc-auth-role
 GEOSERVER_ENABLE_JDBC_ROLE=true
 GEOSERVER_ENABLE_JDBC_AUTH=true
+GEOSERVER_ENABLE_JDBC_CONFIG=false
 
 # Backend
 make up-all ENV=prod
@@ -160,19 +168,15 @@ ENV_FILE=.env.prod ./scripts/activate_jdbcS_settings.sh
 # NOTE: Also activate "jdbc_login" service in UI (Step A)
 ```
 
-### Enable `jdbc-config` (Full Config in DB) ⚠️ Advanced Only
+### Enable JDBCConfig (Full Config in DB) ⚠️ Advanced Only
 ```bash
 # .env.prod settings
-GEOSERVER_SECURITY_MODE=jdbc-config
 GEOSERVER_ENABLE_JDBC_CONFIG=true
-COMMUNITY_PLUGINS=sec-oidc,jdbcconfig
 
-# Dockerfile build arg (REQUIRED – else plugins missing at runtime)
-# Add to docker-compose-prod.yml build args:
-#   BUILD_JDBC_PLUGINS: "true"
+# Image requirement:
+# The production GeoServer image must be built with JDBCConfig/JDBCStore plugins.
 
 # Backend
-make build-cache ENV=prod  # Rebuild image with JDBC plugins
 make up-all ENV=prod
 ENV_FILE=.env.prod ./scripts/activate_jdbcS_settings.sh
 
@@ -181,7 +185,7 @@ ENV_FILE=.env.prod ./scripts/activate_jdbcS_settings.sh
 ```
 
 > ⚠️ **Critical for `jdbc-config`:**  
-> - `global.xml` is no longer authoritative – proxy settings applied via REST after startup  
+> - `global.xml` is no longer authoritative – proxy settings are applied via REST after startup
 > - Use separate PostgreSQL schemas: `PG_SCHEMA_GEOSERVER` (security) vs `PG_SCHEMA_JDBCCONF` (config)  
 > - Test thoroughly in staging before production
 
@@ -284,7 +288,7 @@ ls -la /geoserver_data/data/security/
 | Admin loses access after JDBC enable | Administrator role not mapped | Re-do Step C: explicitly set `ADMIN` role |
 | New users disappear after restart | User service still file-backed | Activate `jdbc_login` via UI (Step A) |
 | Settings revert after restart | UI Save skipped or restart not confirmed | Re-do UI steps, ensure Save + restart confirmation |
-| `jdbc-config` mode: missing tables | Plugins not in image | Set `BUILD_JDBC_PLUGINS=true`, rebuild image |
+| `jdbc-config` missing tables/classes | Plugins not in image | Build/publish the GeoServer image with JDBCConfig/JDBCStore plugins |
 | Slow startup in JDBC mode | DB connection pool too small | Tune `maxPoolSize` in JDBC service config via UI |
 
 ---
@@ -314,9 +318,9 @@ ls -la /geoserver_data/data/security/
 graph TD
     A[Start: Need PostgreSQL?] -->|No| B[Use default mode<br>make up ENV=prod]
     A -->|Yes| C{What do you need in DB?}
-    C -->|Just roles/permissions| D[jdbc-role mode<br>✅ Safest first step]
-    C -->|Users + roles| E[jdbc-auth-role mode]
-    C -->|Everything: config, layers, styles| F[jdbc-config mode<br>⚠️ Advanced only]
+    C -->|Just roles/permissions| D[JDBC ROLE flag<br>✅ Safest first step]
+    C -->|Users + roles| E[JDBC AUTH + ROLE flags]
+    C -->|Everything: config, layers, styles| F[JDBC CONFIG flag<br>⚠️ Advanced only]
     
     D --> G[Run make up-all + activate_jdbcS_settings.sh]
     E --> G

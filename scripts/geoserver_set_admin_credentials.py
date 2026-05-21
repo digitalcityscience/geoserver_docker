@@ -124,6 +124,14 @@ def fallback_admin_has_access(base_url: str) -> bool:
     return False
 
 
+def wait_for_admin_access(base_url: str, user: str, password: str, attempts: int = 6) -> bool:
+    for _ in range(attempts):
+        if credentials_have_admin_access(base_url, user, password):
+            return True
+        time.sleep(2)
+    return False
+
+
 def update_own_password(base_url: str, auth_user: str, auth_password: str, new_password: str) -> bool:
     attempts = (
         (
@@ -274,6 +282,31 @@ def main() -> int:
 
     if not wait_for_rest(base_url, timeout_seconds, poll_seconds):
         return warn_or_fail("GeoServer REST did not become reachable for admin credential bootstrap")
+
+    if target_user != DEFAULT_ADMIN_USER:
+        print("Applying GeoServer admin credentials with first-boot fallback credentials")
+        if ensure_user(base_url, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD, target_user, target_password):
+            if not ensure_role_assignment(base_url, DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD, target_user, "ADMIN"):
+                return warn_or_fail(f"GeoServer ADMIN role could not be assigned to user '{target_user}'")
+
+            if disable_default_admin:
+                if set_user_enabled(base_url, target_user, target_password, DEFAULT_ADMIN_USER, False):
+                    print("Default GeoServer admin user was disabled")
+                else:
+                    return warn_or_fail("Default GeoServer admin user could not be disabled")
+            elif not wait_for_admin_access(base_url, target_user, target_password):
+                print(
+                    f"Warning: GeoServer did not immediately accept configured admin credentials "
+                    f"for user '{target_user}'; continuing because user and role updates succeeded"
+                )
+
+            print(f"GeoServer admin credentials are configured for user '{target_user}'")
+            return 0
+
+        print(
+            "First-boot fallback credentials could not create or update the configured admin user; "
+            "checking whether the configured admin already works"
+        )
 
     if credentials_have_admin_access(base_url, target_user, target_password):
         print(f"GeoServer admin credentials are already configured for user '{target_user}'")

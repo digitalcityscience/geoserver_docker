@@ -32,7 +32,7 @@ make up          # Start
 
 ✅ **Done!**  
 🌐 Open: http://localhost:8080/geoserver  
-🔐 Login: `admin` / `geoserver`
+🔐 Login with `GEOSERVER_ADMIN_USER` / `GEOSERVER_ADMIN_PASSWORD` from your active env file.
 
 > 🔄 **Check your current environment anytime:**  
 > `make current-env`
@@ -113,7 +113,7 @@ Edit these in `.env.dev` or `.env.prod`:
 | `GEOSERVER_PUBLIC_URL` | `https://maps.yourcompany.com/geoserver` | The URL users see in their browser |
 | `PROXY_BASE_URL` | `https://maps.yourcompany.com/geoserver` | Base URL for all generated links (WMS, REST, etc.) |
 | `GEOSERVER_CORS_ALLOWED_ORIGINS` | `https://app.yourcompany.com` | Which websites can call your GeoServer API |
-| `GEOSERVER_SECURITY_MODE` | `default` | How GeoServer stores config (`default`, `jdbc-role`, etc.) |
+| `GEOSERVER_SECURITY_MODE` | `default` | Optional preset for JDBC flags |
 
 > ✅ All other settings have safe defaults. Leave them alone until you need them.
 
@@ -121,27 +121,38 @@ When `GEOSERVER_ADMIN_USER` is changed from `admin`, the container creates that 
 
 ---
 
-## 🔄 Runtime Modes – Pick One
+## 🔄 JDBC Runtime Features
 
-Set `GEOSERVER_SECURITY_MODE` in your `.env` file.
+GeoServer JDBC support is controlled by three related but independent feature flags:
 
-| Mode | Where settings are stored | Needs PostgreSQL? | Use this when… |
-|------|--------------------------|-------------------|----------------|
-| `default` ⭐ | Simple files (XML) | ❌ No | **Start here.** Works for 90% of cases. |
-| `jdbc-role` | Roles in DB, users in files | ✅ Yes | You want role/permission mappings in PostgreSQL. |
-| `jdbc-auth-role` | Users + Roles in DB | ✅ Yes | You want full user/role management from PostgreSQL. |
-| `jdbc-config` | Everything in DB | ✅ Yes | Advanced use only. You know what you're doing. |
+| Flag | What it enables | Needs PostgreSQL? |
+|------|-----------------|-------------------|
+| `GEOSERVER_ENABLE_JDBC_ROLE=true` | JDBC role service and user-to-role mappings | ✅ Yes |
+| `GEOSERVER_ENABLE_JDBC_AUTH=true` | JDBC user/group service and auth provider | ✅ Yes |
+| `GEOSERVER_ENABLE_JDBC_CONFIG=true` | Advanced JDBCConfig catalog/config backend | ✅ Yes |
 
-> 🚦 **Golden Rule:** Always start with `default`. Get it working. Then switch modes if you truly need to.
+`GEOSERVER_ENABLE_JDBC_AUTH=true` implies role support because DB-backed users still need DB-backed role mappings. `GEOSERVER_ENABLE_JDBC_CONFIG=true` is separate from security; do not enable it just to get JDBC roles or JDBC users.
+
+`GEOSERVER_SECURITY_MODE` still exists as a convenience preset:
+
+| Preset | Equivalent flags |
+|--------|------------------|
+| `default` | no JDBC flags forced |
+| `jdbc-role` | `GEOSERVER_ENABLE_JDBC_ROLE=true` |
+| `jdbc-auth-role` | `GEOSERVER_ENABLE_JDBC_ROLE=true`, `GEOSERVER_ENABLE_JDBC_AUTH=true` |
+| `jdbc-config` | `GEOSERVER_ENABLE_JDBC_CONFIG=true` |
+
+The flags are the source of truth. Production reviews should check the `GEOSERVER_ENABLE_JDBC_*` values directly.
 
 ---
 
-### 🔁 How to Switch Modes
+### 🔁 How to Enable JDBC Features
 
 ```bash
 # 1. Edit your .env file
-GEOSERVER_SECURITY_MODE=jdbc-role
 GEOSERVER_ENABLE_JDBC_ROLE=true
+GEOSERVER_ENABLE_JDBC_AUTH=true
+GEOSERVER_ENABLE_JDBC_CONFIG=false
 
 # 2. Rebuild and start with database
 make up-all
@@ -153,7 +164,7 @@ make activate-jdbc
 make verify-jdbc
 ```
 
-> 💡 **Tip:** Use `make up-all` (not just `up`) when enabling any JDBC mode, because PostgreSQL must be running.
+> 💡 **Tip:** Use `make up-all` (not just `up`) when enabling JDBC features, because PostgreSQL must be running.
 
 ---
 
@@ -164,22 +175,22 @@ make verify-jdbc
 | **JDBC ROLE** | Role definitions and user→role mappings | `roles`, `user_roles`, `group_roles` |
 | **JDBC AUTH** | User/group accounts and credentials | `users`, `groups`, `user_props` |
 
-- `jdbc-role` mode → Enables **JDBC ROLE** only (users stay file-backed)
-- `jdbc-auth-role` mode → Enables **JDBC ROLE + JDBC AUTH** (full DB-backed security)
+- `GEOSERVER_ENABLE_JDBC_ROLE=true` → Enables **JDBC ROLE** only (users stay file-backed)
+- `GEOSERVER_ENABLE_JDBC_AUTH=true` → Enables **JDBC ROLE + JDBC AUTH** (full DB-backed security)
 
 ---
 
-### 📋 Mode-Specific Environment Variables
+### 📋 Feature-Specific Environment Variables
 
-| Mode | Required `.env` settings |
-|------|-------------------------|
-| `jdbc-role` | `GEOSERVER_ENABLE_JDBC_ROLE=true` |
-| `jdbc-auth-role` | `GEOSERVER_ENABLE_JDBC_ROLE=true` + `GEOSERVER_ENABLE_JDBC_AUTH=true` |
-| `jdbc-config` | `GEOSERVER_ENABLE_JDBC_CONFIG=true` + `COMMUNITY_PLUGINS=sec-oidc,jdbcconfig` |
+| Feature | Required `.env` settings |
+|---------|--------------------------|
+| JDBC role | `GEOSERVER_ENABLE_JDBC_ROLE=true` |
+| JDBC auth | `GEOSERVER_ENABLE_JDBC_AUTH=true` |
+| JDBCConfig | `GEOSERVER_ENABLE_JDBC_CONFIG=true` |
 
-> ⚠️ **Important for `jdbc-config`:** This mode also requires `BUILD_JDBC_PLUGINS=true` in your Dockerfile build args, otherwise the required plugins won't be available at runtime.
+> ⚠️ **Important for `jdbc-config`:** The image must include the JDBCConfig/JDBCStore plugins. In production, bake these into the CI-built image instead of depending on runtime plugin downloads.
 
-> ⚠️ **Required for `jdbc-role` / `jdbc-auth-role`:**  
+> ⚠️ **Required for JDBC role/auth:**
 > Backend config alone is **not enough**. After `make up-all`, you **must** run JDBC activation and complete the UI steps.  
 > **Without this step, JDBC ROLE / JDBC AUTH will not work.**
 > ```bash
@@ -193,7 +204,7 @@ make verify-jdbc
 
 ---
 
-### 🔄 Switching Back to `default` Mode
+### 🔄 Disabling JDBC Features
 
 ```bash
 # 1. Edit your .env file
@@ -206,7 +217,7 @@ GEOSERVER_ENABLE_JDBC_CONFIG=false
 make rebuild
 ```
 
-> ℹ️ Your file-based config (`global.xml`, `users.xml`, etc.) will be used again. JDBC-backed data remains in PostgreSQL but is ignored until you re-enable the mode.
+> ℹ️ Your file-based config (`global.xml`, `users.xml`, etc.) will be used again. JDBC-backed data remains in PostgreSQL but is ignored until you re-enable the flags.
 
 ---
 
@@ -277,7 +288,7 @@ make verify
 | Browser shows "Mixed Content" warning | Login form uses `http` on `https` site | Ensure proxy sends `X-Forwarded-Proto: https` |
 | CORS error in browser console | `GEOSERVER_CORS_ALLOWED_ORIGINS` doesn't match your frontend | Add exact origin: `https://app.yourcompany.com` |
 | JDBC mode won't connect | PostgreSQL not ready or wrong credentials | Use `make up-all` to start DB + GeoServer together |
-| Startup is very slow first time | Plugins downloading at runtime | Set `BUILD_JDBC_PLUGINS=true` in Dockerfile to bake them in |
+| Startup is very slow first time | Plugins downloading at runtime | Bake required plugins into the CI-built image |
 | "Permission denied" on data directory | Volume mounted with wrong user | Ensure volume is writable by UID 1000 (Tomcat) |
 | "Invalid ENV" error | `.env-selected` has wrong value | Run `make set-env-dev` or `make set-env-prod` |
 
