@@ -10,12 +10,9 @@ services:
       POSTGRES_USER: ${PG_SUPERUSER}
       POSTGRES_PASSWORD: ${PG_SUPERPASS}
 
-      # initdb script'lerin kullanıyorsa bunları da geçiyoruz:
-      PG_API_USER: ${PG_API_USER}
-      PG_API_PASSWORD: ${PG_API_PASSWORD}
+      # GeoServer database role and schemas used by the init script.
       PG_GS_USER: ${PG_GS_USER}
       PG_GS_PASSWORD: ${PG_GS_PASSWORD}
-      PG_SCHEMA_API: ${PG_SCHEMA_API}
       PG_SCHEMA_GEOSERVER: ${PG_SCHEMA_GEOSERVER}
       PG_SCHEMA_GIS: ${PG_SCHEMA_GIS}
     ports:

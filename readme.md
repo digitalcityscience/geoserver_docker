@@ -1,216 +1,95 @@
-# 🚀 GeoServer Docker Automation
+# GeoServer Docker Image
 
-A ready-to-use Docker setup for GeoServer.
+A self-contained GeoServer Docker image based on Tomcat 9 and Java 17. It downloads the selected GeoServer release and installs the configured official and community extensions at build time.
 
-Build custom GeoServer images with selected plugins, run them with PostgreSQL / PostGIS, and switch easily between development (localhost) and production (domain) setups.
+The image can run on its own. PostgreSQL/PostGIS, JDBC security, and JDBCConfig are optional integrations for deployments that need them.
 
-When the system first starts, both in development and production, the default username and password are admin:geoserver.
+## Quick start: run GeoServer only
 
-If you are not just testing on your own computer, you should change this immediately. Even if you are running test deployments in a closed environment within your organization, change it right away.
+Build a local image:
 
-To change the password: go to
+```bash
+docker build \
+  --build-arg GEOSERVER_VERSION=2.28.5 \
+  -t dcs-geoserver:2.28.5 \
+  -f docker/Dockerfile .
+```
 
-> User, Groups, Roles → User groups → click the admin user and update the password.
+Run it with a persistent data directory:
 
-By default, Geoserver stores this password in an XML-based structure. For development or closed environment systems, this is acceptable. For production, it is recommended to use JDBC settings or an OAuth solution like Keycloak.
+```bash
+docker run -d \
+  --name geoserver \
+  -p 8080:8080 \
+  -v geoserver_data:/geoserver_data/data \
+  dcs-geoserver:2.28.5
+```
 
----
+Open <http://localhost:8080/geoserver>. On first start, GeoServer uses its standard `admin` / `geoserver` credentials. Change them before exposing the service beyond a trusted local environment.
 
-### 🧑‍💻 Local Development
+Published images are available from GitHub Container Registry after the image workflow has run:
+
+```bash
+docker pull ghcr.io/digitalcityscience/tosca-geoserver:2.28.5
+```
+
+## Local Compose stack (GeoServer + PostGIS)
+
+Use this option when you want a local PostGIS database for spatial stores, or plan to enable the optional JDBC services.
 
 ```bash
 cp env_dev_sample .env.dev
 make up ENV=dev
 ```
 
-👉 Opens at http://localhost:8080/geoserver
+The stack starts GeoServer at <http://localhost:8080/geoserver> and PostGIS on the port configured by `PG_PORT`. The database initialization creates only GeoServer-specific schemas and roles:
 
----
+- `PG_SCHEMA_GEOSERVER` for JDBC user and role services
+- `PG_SCHEMA_JDBCCONF` for JDBCConfig
+- `PG_SCHEMA_GIS` for spatial data GeoServer may read
 
-### 🌐 Server / Production (with domain + reverse proxy)
+`env_dev_sample` is a template. Copy it to `.env.dev` and set passwords and ports appropriate for your machine. `.env.dev` is ignored by Git.
+
+For a server deployment, copy `env_prod_sample` to `.env.prod`, replace every example secret, set an appropriately restrictive CORS allow-list, and run:
 
 ```bash
-cp env_prod_sample .env.prod
 make up ENV=prod
 ```
 
-👉 Review all values inside `.env.prod` carefully before running in production.
+## Optional JDBC security and configuration
 
----
+GeoServer works without JDBC; its default configuration and users are stored in the data directory. Enable the JDBC path only when you want PostgreSQL-backed users, roles, and/or server configuration.
 
-### ⚙️ Environment Configuration (Important)
+The Compose templates include the required database, schemas, and extension list. After the stack is running, follow [the JDBC setup guide](./readme_jdbc.md) to activate the services in GeoServer.
 
-This project is fully driven by environment files:
+## Configure plugins
 
-- `.env.dev` → local development (localhost)
-- `.env.prod` → production / server (domain, HTTPS, reverse proxy)
-
-⚠️ Almost all scripts, Makefile targets, and Docker behavior depend on these env files.  
-If an env file is missing, misnamed, or not loaded, things will fail — often silently.
-
----
-
-### 🗄 JDBC / PostgreSQL Setup (Advanced)
-
-**When do you need this?**  
-If you want to:
-
-- Store GeoServer users & roles in PostgreSQL
-- Store GeoServer configuration (workspaces, layers, styles, stores) in PostgreSQL
-- Run GeoServer reliably in production (AWS / on-prem / CI/CD)
-
-👉 You must run GeoServer together with PostgreSQL  
-👉 You must read **[JDBC documentation](./readme_jdbc.md)**
-
-This setup is **not optional** for JDBC-based security or JDBCConfig.
-
-**What this project supports:**
-
-- JDBC User / Role security (PostgreSQL-backed)
-- JDBCConfig / JDBCStore (GeoServer configuration in DB)
-- Separate schemas for:
-  - Security (users, roles)
-  - GeoServer configuration (workspaces, layers, styles)
-
-📖 All details, caveats, and required UI steps are documented in:  
-**`readme_jdbc.md`**
-
-> 💡 If you skip that document, things will look broken — even if they are not.
-
----
-
-### 📂 Script Location Matters (Very Important)
-
-Some scripts must be executed from the **project root**, next to the env files.
-
-**Example:**
-
-```bash
-scripts/activate_jdbcS_settings.sh
-```
-
-This script expects:
-
-- `.env.dev` or `.env.prod` to be in the same directory level
-- Environment variables to be auto-loaded
-
-❌ Running it from another folder  
-❌ Copying it elsewhere  
-❌ Renaming env files
-
-→ will cause failures.
-
-**Rule of thumb:**  
-If the script cannot see the env file, it cannot work.
-
----
-
-### 🛠 Features
-
-- **Automatic Plugin Installation** – define plugins once, they’re fetched & installed
-- **Custom Version Support** – any GeoServer version via `.env`
-- **Dev-Ready Stack** – includes MobilityDB for PostGIS mobility data testing
-- **Automated Workflow** – Makefile simplifies build / run / clean
-- **JDBC-ready architecture** for production deployments
-
----
-
-### ▶️ Makefile Tasks
-
-| Command                  | Description                                             |
-| ------------------------ | ------------------------------------------------------- |
-| `make which-env ENV=dev` | Shows the active environment and loaded `.env` file     |
-| `make build ENV=dev`     | Builds Docker images without cache                      |
-| `make up ENV=dev`        | Starts the stack using `.env.dev`                       |
-| `make up ENV=prod`       | Starts the stack using `.env.prod` (runs safety checks) |
-| `make down ENV=dev`      | Stops all containers                                    |
-| `make restart ENV=dev`   | Restarts the stack (`down` + `up`)                      |
-| `make logs`              | Shows logs from all containers                          |
-| `make logs geoserver`    | Shows logs only from the GeoServer container            |
-| `make rebuild ENV=prod`  | Rebuilds images without cache and restarts the stack    |
-| `make rmVolumes ENV=dev` | ⚠️ **Removes all volumes (DATA LOSS)**                  |
-
----
-
-### 📦 GeoServer Plugins (Official & Community)
-
-GeoServer plugins are configured **only via environment files**.  
-There is **no manual download**, **no URL handling**, and **no Makefile editing** required.
-
-You only need to edit **one place**:
-
-- `.env.dev` for local development
-- `.env.prod` for production
-
----
-
-#### Official Plugins
-
-List official plugins as **comma-separated names**:
+Set comma-separated plugin identifiers in the environment file:
 
 ```env
 OFFICIAL_PLUGINS=gdal,monitor,vectortiles,mbstyle
-```
-
-**Rules:**
-
-- Use the **plugin identifier**, not the full ZIP name
-- Names must match official GeoServer plugin naming
-- Docker automatically downloads and installs the correct version
-- Plugin version always matches `GEOSERVER_VERSION`
-
----
-
-#### Community Plugins
-
-Community plugins are also listed as **comma-separated names**:
-
-```env
 COMMUNITY_PLUGINS=jdbcconfig,jdbcstore,sec-oauth2-openid-connect
 ```
 
-**Notes:**
-
-- These are **GeoAssistant community modules**
-- Versions are resolved automatically
-- No URLs are required
-- Community plugins may be less stable than official ones
-
----
-
-#### Applying Plugin Changes
-
-After changing plugin lists in `.env.dev` or `.env.prod`, you **must rebuild** the image:
+The plugin manager resolves official extensions for the exact `GEOSERVER_VERSION`; community modules use the corresponding GeoServer series. Changes to these lists require rebuilding the image:
 
 ```bash
 make rebuild ENV=dev
-make rebuild ENV=prod
 ```
 
-Docker will handle:
+If you regularly use a custom plugin set, update the GitHub Actions workflow and publish an image containing that set. This avoids extension downloads at container startup.
 
-- Resolving plugin versions
-- Downloading plugin archives
-- Installing them into the GeoServer image
+## Common commands
 
----
+| Command | Description |
+| --- | --- |
+| `make build ENV=dev` | Build the local GeoServer image |
+| `make up ENV=dev` | Start the local GeoServer + PostGIS stack |
+| `make down ENV=dev` | Stop the stack while retaining its volumes |
+| `make logs geoserver ENV=dev` | Follow GeoServer logs |
+| `make rebuild ENV=dev` | Rebuild the image and restart the stack |
+| `make rmVolumes ENV=dev` | Remove containers and volumes (data loss) |
 
-#### Important Notes
+## Version compatibility
 
-- Plugin configuration is **environment-specific**
-- Development and production may use **different plugin sets**
-- Manual plugin downloads are **not supported**
-- If a plugin fails to load, check GeoServer logs first
-
-👉 **Edit the env file — Docker does the rest.**
-
----
-
-### Final Note
-
-This repository supports:
-
-- Simple local testing
-- Serious JDBC-backed production setups
-
-—but the **JDBC path requires reading `readme_jdbc.md`**.
+GeoServer 2.28.x requires Java 17 or later. The Dockerfile therefore uses a Java 17 Tomcat 9 image. GeoServer 2.x remains compatible with Tomcat 9.

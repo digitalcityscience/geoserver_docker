@@ -159,7 +159,7 @@ Infrastructure Status:
 **Integration Points:**
 
 - External user provisioning systems (SCIM, LDAP sync)
-- Django/IAM system integrations
+- External IAM system integrations
 - Security auditing and compliance reporting
 - Automated user lifecycle management
 

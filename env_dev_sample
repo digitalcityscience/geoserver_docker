@@ -1,14 +1,14 @@
 ############################
 # GLOBAL
 ############################
-COMPOSE_PROJECT_NAME=tosca_geoserver_dev
+COMPOSE_PROJECT_NAME=geoserver_dev
 
 ############################
-# POSTGRES (Shared DB)
+# POSTGRES / POSTGIS (optional GeoServer companion database)
 ############################
 PG_HOST=db
 PG_PORT=5438
-PG_DATABASE=tosca
+PG_DATABASE=geoserver
 PG_DOCKER_PORT=5432
 
 # PostgreSQL superuser
@@ -16,21 +16,14 @@ PG_SUPERUSER=postgres
 PG_SUPERPASS=postgres
 
 ############################
-# APPLICATION ROLES
+# GEOSERVER DATABASE ROLE
 ############################
-
-# Django (API)
-PG_API_USER=tosca_api
-PG_API_PASSWORD=postgres_api
-
-# GeoServer
-PG_GS_USER=tosca_gs
+PG_GS_USER=geoserver
 PG_GS_PASSWORD=postgres_gs
 
 ############################
-# POSTGRES SCHEMAS
+# GEOSERVER DATABASE SCHEMAS
 ############################
-PG_SCHEMA_API=api_schema
 PG_SCHEMA_GEOSERVER=gs_auth_role_schema
 PG_SCHEMA_GIS=gis_schema
 PG_SCHEMA_JDBCCONF=gs_jdbcconfig_schema

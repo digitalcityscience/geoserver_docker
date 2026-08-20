@@ -4,26 +4,20 @@ set -e
 ############################################
 # ENV
 ############################################
-API_USER="${PG_API_USER:-tosca_api}"
-API_PASS="${PG_API_PASSWORD:-postgres_api}"
-
-GS_USER="${PG_GS_USER:-tosca_gs}"
+GS_USER="${PG_GS_USER:-geoserver}"
 GS_PASS="${PG_GS_PASSWORD:-postgres_gs}"
 
-SCHEMA_API="${PG_SCHEMA_API:-api_schema}"
 SCHEMA_GS="${PG_SCHEMA_GEOSERVER:-gs_auth_role_schema}"
 SCHEMA_GIS="${PG_SCHEMA_GIS:-gis_schema}"
 SCHEMA_JDBCCONF="${PG_SCHEMA_JDBCCONF:-gs_jdbcconfig_schema}"
 
 echo "Initializing database schemas:"
-echo "  API        -> $SCHEMA_API"
 echo "  GeoServer  -> $SCHEMA_GS"
 echo "  JDBCConfig -> $SCHEMA_JDBCCONF"
 echo "  GIS        -> $SCHEMA_GIS"
 
 echo "Creating users:"
-echo "  API User -> $API_USER"
-echo "  GS User  -> $GS_USER"
+echo "  GeoServer user -> $GS_USER"
 
 ############################################
 # INIT
@@ -36,7 +30,6 @@ psql -v ON_ERROR_STOP=1 \
 CREATE EXTENSION IF NOT EXISTS postgis;
 
 -- 1) Schemas
-CREATE SCHEMA IF NOT EXISTS $SCHEMA_API;
 CREATE SCHEMA IF NOT EXISTS $SCHEMA_GS;
 CREATE SCHEMA IF NOT EXISTS $SCHEMA_JDBCCONF;
 CREATE SCHEMA IF NOT EXISTS $SCHEMA_GIS;
@@ -44,10 +37,6 @@ CREATE SCHEMA IF NOT EXISTS $SCHEMA_GIS;
 -- 2) Roles
 DO \$\$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$API_USER') THEN
-    CREATE ROLE $API_USER LOGIN PASSWORD '$API_PASS';
-  END IF;
-
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$GS_USER') THEN
     CREATE ROLE $GS_USER LOGIN PASSWORD '$GS_PASS';
   END IF;
@@ -58,11 +47,9 @@ END
 GRANT ALL ON SCHEMA $SCHEMA_GS       TO $GS_USER;
 GRANT ALL ON SCHEMA $SCHEMA_JDBCCONF TO $GS_USER;
 
-GRANT ALL ON SCHEMA $SCHEMA_API TO $API_USER;
 GRANT USAGE ON SCHEMA $SCHEMA_GIS TO $GS_USER;
 
 -- 4) search_path (KRİTİK)
-ALTER ROLE $API_USER SET search_path = $SCHEMA_API, public;
 ALTER ROLE $GS_USER  SET search_path = $SCHEMA_GS, $SCHEMA_JDBCCONF, public;
 
 -- 5) public / PostGIS permissions (GeoServer için şart)
