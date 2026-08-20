@@ -159,7 +159,7 @@ Infrastructure Status:
 **Integration Points:**
 
 - External user provisioning systems (SCIM, LDAP sync)
-- External IAM system integrations
+- TOSCA Backend / Django and external IAM integrations
 - Security auditing and compliance reporting
 - Automated user lifecycle management
 

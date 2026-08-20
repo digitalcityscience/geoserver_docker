@@ -56,6 +56,21 @@ For a server deployment, copy `env_prod_sample` to `.env.prod`, replace every ex
 make up ENV=prod
 ```
 
+## Django development integration (TOSCA Backend)
+
+The [TOSCA Backend](https://github.com/digitalcityscience/TOSCA-Backend) consumes this repository as the `docker/geoserver_docker` Git submodule. Its development Compose file builds GeoServer from that local submodule and starts GeoServer, Django, and their shared PostGIS database together.
+
+The responsibilities are deliberately separated:
+
+- This repository owns the reusable GeoServer image, its plugins, and GeoServer-only standalone examples.
+- TOSCA Backend owns its Django service, the shared development database, and Django-specific `PG_API_*` and `PG_SCHEMA_API` settings.
+
+When working on the full application, start the stack from the TOSCA Backend repository, using its `docker-compose-dev.yml`. Do not run this repository's Compose stack at the same time: both stacks use the same default GeoServer, PostGIS, container-name, and port conventions.
+
+To test an image change in the full application, update the submodule checkout in TOSCA Backend to the branch or commit under test, then run the backend development stack. Once the image change is merged, commit the updated submodule reference in TOSCA Backend.
+
+The standalone environment templates in this repository intentionally do not define Django credentials or schemas. They are not required to run the GeoServer image and belong to the application repository that uses them.
+
 ## Optional JDBC security and configuration
 
 GeoServer works without JDBC; its default configuration and users are stored in the data directory. Enable the JDBC path only when you want PostgreSQL-backed users, roles, and/or server configuration.
