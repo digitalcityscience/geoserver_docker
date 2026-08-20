@@ -1,14 +1,14 @@
 # -----------------------------
 # Base Tomcat
 # -----------------------------
-ARG IMAGE_VERSION=9.0.106-jdk11-temurin-jammy
+ARG IMAGE_VERSION=9.0.106-jdk17-temurin-jammy
 FROM tomcat:${IMAGE_VERSION}
 LABEL maintainer="orttak"
 
 # -----------------------------
 # Build-time args (IMAGE IDENTITY)
 # -----------------------------
-ARG GEOSERVER_VERSION=2.27.2
+ARG GEOSERVER_VERSION=2.28.5
 ARG JAVA_OPTS="-Xms512m -Xmx1024m"
 # Build-time defaults
 ARG DEFAULT_OFFICIAL_PLUGINS="gdal,monitor,vectortiles,mbstyle"

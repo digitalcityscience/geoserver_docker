@@ -2,16 +2,16 @@ from dataclasses import dataclass
 
 @dataclass
 class GeoServerContext:
-    version: str  # e.g. 2.27.2
+    version: str  # e.g. 2.28.5
 
     @property
     def series(self) -> str:
-        # 2.27.2 → 2.27
+        # 2.28.5 → 2.28
         return ".".join(self.version.split(".")[:2])
 
     @property
     def community_version(self) -> str:
-        # 2.27 → 2.27-SNAPSHOT
+        # 2.28 → 2.28-SNAPSHOT
         return f"{self.series}-SNAPSHOT"
 
 

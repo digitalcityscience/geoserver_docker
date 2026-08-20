@@ -16,7 +16,7 @@ def main():
         description="GeoServer plugin manager"
     )
 
-    parser.add_argument("--version", help="GeoServer version (e.g. 2.27.2)")
+    parser.add_argument("--version", help="GeoServer version (e.g. 2.28.5)")
     parser.add_argument("--community", help="Community plugins (comma-separated)")
     parser.add_argument("--official", help="Official plugins (comma-separated)")
     parser.add_argument("--dry-run", action="store_true")

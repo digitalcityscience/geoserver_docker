@@ -37,7 +37,7 @@ PG_SCHEMA_JDBCCONF=gs_jdbcconfig_schema
 ############################
 # GEOSERVER CORE
 ############################
-GEOSERVER_VERSION=2.27.2
+GEOSERVER_VERSION=2.28.5
 GEOSERVER_PORT=8080
 GEOSERVER_DATA_DIR=/geoserver_data/data
 
@@ -102,4 +102,3 @@ GEOSERVER_CORS_ALLOWED_HEADERS=*
 # GEOSERVER – OPTIONAL
 ############################
 DISK_QUOTA_ENABLED=false
-
