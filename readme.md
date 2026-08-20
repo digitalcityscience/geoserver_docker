@@ -6,31 +6,35 @@ The image can run on its own. PostgreSQL/PostGIS, JDBC security, and JDBCConfig 
 
 ## Quick start: run GeoServer only
 
-Build a local image:
+For normal use, pull a published image from the [GitHub Container Registry package](https://github.com/digitalcityscience/geoserver_docker/pkgs/container/tosca-geoserver). Prefer a specific GeoServer version over `latest`.
 
 ```bash
-docker build \
-  --build-arg GEOSERVER_VERSION=2.28.5 \
-  -t dcs-geoserver:2.28.5 \
-  -f docker/Dockerfile .
+docker pull ghcr.io/digitalcityscience/tosca-geoserver:2.28.5
 ```
 
-Run it with a persistent data directory:
+Run the published image with a persistent data directory:
 
 ```bash
 docker run -d \
   --name geoserver \
   -p 8080:8080 \
   -v geoserver_data:/geoserver_data/data \
-  dcs-geoserver:2.28.5
+  ghcr.io/digitalcityscience/tosca-geoserver:2.28.5
 ```
 
 Open <http://localhost:8080/geoserver>. On first start, GeoServer uses its standard `admin` / `geoserver` credentials. Change them before exposing the service beyond a trusted local environment.
 
-Published images are available from GitHub Container Registry after the image workflow has run:
+Versioned images are published by the GitHub Actions workflow after changes are merged to `main`. Use the package page to find available tags.
+
+## Build an image locally
+
+Build locally only when developing this image or testing an unreleased GeoServer version:
 
 ```bash
-docker pull ghcr.io/digitalcityscience/tosca-geoserver:2.28.5
+docker build \
+  --build-arg GEOSERVER_VERSION=2.28.5 \
+  -t dcs-geoserver:2.28.5 \
+  -f docker/Dockerfile .
 ```
 
 ## Local Compose stack (GeoServer + PostGIS)
