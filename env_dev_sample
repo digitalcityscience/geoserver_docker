@@ -1,13 +1,17 @@
 ############################
 # GLOBAL
 ############################
-COMPOSE_PROJECT_NAME=geoserver_dev
+# Dedicated Compose project: its network and named volumes do not overlap with
+# another local TOSCA Backend stack.
+COMPOSE_PROJECT_NAME=geoserver_2285_jdbc_dev
 
 ############################
 # POSTGRES / POSTGIS (optional GeoServer companion database)
 ############################
 PG_HOST=db
-PG_PORT=5438
+# 5438 is commonly occupied by the TOSCA Backend stack.
+PG_PORT=5448
+POSTGRES_CONTAINER_NAME=geoserver-2285-db
 PG_DATABASE=geoserver
 PG_DOCKER_PORT=5432
 
@@ -31,7 +35,9 @@ PG_SCHEMA_JDBCCONF=gs_jdbcconfig_schema
 # GEOSERVER CORE
 ############################
 GEOSERVER_VERSION=2.28.5
-GEOSERVER_PORT=8080
+# Host port only; GeoServer still listens on 8080 inside its container.
+GEOSERVER_PORT=8383
+GEOSERVER_CONTAINER_NAME=geoserver-2285
 GEOSERVER_DATA_DIR=/geoserver_data/data
 
 GEOSERVER_ADMIN_USER=admin2
@@ -76,9 +82,23 @@ OFFICIAL_PLUGINS=gdal,monitor,vectortiles,mbstyle
 COMMUNITY_PLUGINS=jdbcconfig,jdbcstore,sec-oauth2-openid-connect
 
 ############################
-# GEOSERVER – JDBC CONFIG
-ENABLE_JDBC_CONFIG=true
+# GEOSERVER – JDBC SECURITY
+# This test stack is prepared for JDBC roles and JDBC authentication. The
+# activation script applies the JDBC services after GeoServer and PostGIS start.
+GEOSERVER_SECURITY_MODE=jdbc-auth-role
+GEOSERVER_ENABLE_JDBC_ROLE=true
+GEOSERVER_ENABLE_JDBC_AUTH=true
 ENABLE_JDBC_LOGIN=true
+
+# JDBCConfig is separate from JDBC security. It stores GeoServer catalog data
+# (workspaces, datastores/stores, layers, styles, services, and settings) in
+# PostgreSQL. It does NOT control JDBC users, authentication, or roles.
+#
+# false: only security uses PostgreSQL; catalog/config remains in
+#        /geoserver_data/data (the normal and safer starting point).
+# true:  enable the JDBCConfig extension to persist catalog/config in
+#        PG_SCHEMA_JDBCCONF. Test this separately before production use.
+ENABLE_JDBC_CONFIG=false
 JDBC_LOGIN_SERVICE_NAME=jdbc_login
 JDBC_AUTH_SERVICE_NAME=jdbc_auth
 

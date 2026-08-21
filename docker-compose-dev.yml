@@ -1,7 +1,8 @@
 services:
   db:
     image: postgis/postgis:16-3.4
-    container_name: tosca-db
+    # Configurable so this stack can run beside the TOSCA Backend stack.
+    container_name: ${POSTGRES_CONTAINER_NAME:-geoserver-db}
     env_file:
       - .env.dev
 
@@ -41,7 +42,8 @@ services:
       args:
         GEOSERVER_VERSION: ${GEOSERVER_VERSION}
     image: dcs-geoserver:${GEOSERVER_VERSION} #dev purpose local image name
-    container_name: tosca-geoserver
+    # Keep this separate from the GeoServer container owned by TOSCA Backend.
+    container_name: ${GEOSERVER_CONTAINER_NAME:-geoserver}
     env_file:
       - .env.dev
     ports:

@@ -1,12 +1,26 @@
 # Production-Grade GeoServer Setup (PostgreSQL / JDBC)
 
-This setup replaces GeoServer’s default XML-based security and configuration with a PostgreSQL-backed (JDBC) system.
+This setup supports two independent PostgreSQL integrations:
 
-Result:
-• Users, roles, and config are stored in PostgreSQL
-• Settings survive container restarts
-• XML-based security is fully disabled
-• Ready for Keycloak / OIDC integration
+- **JDBC security** stores GeoServer users, groups, authentication, and roles in PostgreSQL.
+- **JDBCConfig** is an optional extension that stores the GeoServer catalog and server configuration in PostgreSQL.
+
+## What `ENABLE_JDBC_CONFIG` controls
+
+`ENABLE_JDBC_CONFIG` controls **only JDBCConfig**. It does not enable or disable JDBC login, authentication, or roles.
+
+| Value | Where GeoServer stores workspaces, stores/datastores, layers, styles, services, and settings | JDBC users and roles |
+| --- | --- | --- |
+| `false` | Files in `GEOSERVER_DATA_DIR` (normally `/geoserver_data/data`) | Can still use PostgreSQL through `jdbc_login`, `jdbc_auth`, and `jdbc_role` |
+| `true` | PostgreSQL schema `PG_SCHEMA_JDBCCONF` through the JDBCConfig extension | Unchanged; JDBC security remains a separate choice |
+
+For a first JDBC rollout, keep `ENABLE_JDBC_CONFIG=false` and enable only JDBC role/auth. This gives PostgreSQL-backed security while leaving the catalog file-backed and easy to inspect or recover. Enable JDBCConfig later only when you specifically want catalog data such as workspaces, datastore/store connections, layers, and styles persisted in PostgreSQL.
+
+Result when only JDBC security is enabled:
+
+- Users and roles are stored in PostgreSQL.
+- GeoServer catalog/configuration remains in the mounted data directory.
+- JDBCConfig tables are not created or used.
 
 ## UI Activation Procedure
 
@@ -70,14 +84,15 @@ Use Git Bash or WSL:
 2. Press **y** to confirm restart
 3. Allow the GeoServer container to complete restart cycle
 
-> **Why restart is mandatory**: This reloads the security chain with JDBC-backed authentication providers and activates the configuration persistence layer.
+> **Why restart is mandatory**: This reloads the security chain with JDBC-backed authentication providers. It does not enable JDBCConfig unless `ENABLE_JDBC_CONFIG=true`.
 
 ⸻
 
 1. Result
    • Credentials defined in .env are now stored in PostgreSQL
    • XML-based security is disabled
-   • GeoServer runs fully JDBC-backed
+   • GeoServer roles and authentication run JDBC-backed
+   • Workspace, store, layer, and style configuration stays file-backed unless `ENABLE_JDBC_CONFIG=true`
    • Keycloak / OIDC integration can now be added safely
 
 ⸻
@@ -90,9 +105,9 @@ Use GeoServer UI or REST API only.
 
 ## Executive Summary
 
-This documentation describes a production-ready GeoServer configuration that leverages PostgreSQL as the persistent backend for **both security management and server configuration**. This architecture eliminates file-based dependencies, ensures configuration persistence across container restarts, and provides enterprise-grade reliability for cloud (AWS), on-premises, or Docker deployments.
+This documentation describes a GeoServer setup that uses PostgreSQL for security management and can optionally use it for server/catalog configuration through JDBCConfig. The two features can be adopted independently.
 
-> **Key Benefit**: Single source of truth in PostgreSQL replaces fragile file-based configurations, enabling true production resilience.
+> **Key Benefit**: Start with JDBC security alone; enable JDBCConfig only when PostgreSQL-backed catalog persistence is a deliberate requirement.
 
 ---
 
@@ -105,13 +120,13 @@ This setup implements a strict separation of concerns using two dedicated Postgr
 | Component                   | Schema Name            | Purpose                          | Data Types                                                 |
 | --------------------------- | ---------------------- | -------------------------------- | ---------------------------------------------------------- |
 | **Security Management**     | `gs_auth_role_schema`  | Authentication and authorization | Users, groups, roles, permissions, relationships           |
-| **GeoServer Configuration** | `gs_jdbcconfig_schema` | Server configuration persistence | Workspaces, datastores, layers, styles, services, settings |
+| **GeoServer Configuration** | `gs_jdbcconfig_schema` | Optional JDBCConfig persistence (`ENABLE_JDBC_CONFIG=true`) | Workspaces, datastores, layers, styles, services, settings |
 
 > **⚠️ Critical Design Principle**: These schemas **MUST** remain separate. Mixing security and configuration data creates lifecycle conflicts, security vulnerabilities, and maintenance complexity.
 
 ### Why This Architecture Matters
 
-After successful implementation:
+When both JDBC security and JDBCConfig are enabled:
 
 - ✅ **No file-based dependencies**: All critical data resides in PostgreSQL
 - ✅ **Configuration persistence**: Container restarts preserve all settings
