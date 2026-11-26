@@ -94,4 +94,14 @@ VOLUME ${GEOSERVER_DATA_DIR}
 # -----------------------------
 # Start (runtime logic in entrypoint)
 # -----------------------------
+# Set by `make image` and by the release workflow.
+ARG VERSION=dev
+ARG REVISION=unknown
+ENV TOSCA_GEOSERVER_VERSION=${VERSION} \
+    TOSCA_GEOSERVER_REVISION=${REVISION}
+LABEL org.opencontainers.image.title="tosca-geoserver" \
+      org.opencontainers.image.source="https://github.com/digitalcityscience/geoserver_docker" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}"
+
 ENTRYPOINT ["/scripts/entrypoint.sh"]
