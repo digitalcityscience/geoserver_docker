@@ -5,6 +5,11 @@ All notable changes to the `tosca-geoserver` image. Versions are
 
 ## [Unreleased]
 
+## [2.28.5-tosca.1] - 2026-11-26
+
+First release under the `<GeoServer version>-tosca.<n>` scheme. The existing
+`2.28.5` and `latest` images in GHCR stay as they are.
+
 ### Added
 - Release workflow: images are published only from a `v*` tag, after a smoke
   test of the exact build that is pushed, together with a GitHub Release.
