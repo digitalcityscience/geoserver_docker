@@ -1,3 +1,6 @@
+import os
+import shutil
+import time
 import urllib.request
 import urllib.error
 import zipfile
@@ -70,27 +73,52 @@ class PluginInstaller:
             url = url_fn(plugin)
             self.install(plugin, url)
 
+    # Download mirrors (SourceForge especially) sometimes time out or answer
+    # with an error page; a later attempt usually gets another mirror.
+    ATTEMPTS = int(os.getenv("PLUGIN_DOWNLOAD_ATTEMPTS", "5"))
+    TIMEOUT = float(os.getenv("PLUGIN_DOWNLOAD_TIMEOUT", "120"))
+    BACKOFF = float(os.getenv("PLUGIN_DOWNLOAD_BACKOFF", "10"))
+
     def _download(self, url: str, target: Path) -> None:
+        print(f"   URL: {url}")
+        last_error = None
+        for attempt in range(1, self.ATTEMPTS + 1):
+            try:
+                self._download_once(url, target)
+                print(f"   ✓ Downloaded to {target}")
+                return
+            except urllib.error.HTTPError as e:
+                # 4xx other than 408/429 will not change on retry (e.g. 404).
+                if 400 <= e.code < 500 and e.code not in (408, 429):
+                    raise RuntimeError(f"HTTP {e.code} error downloading {url}: {e.reason}") from e
+                last_error = f"HTTP {e.code}: {e.reason}"
+            except urllib.error.URLError as e:
+                last_error = f"URL error: {e.reason}"
+            except (OSError, zipfile.BadZipFile) as e:
+                last_error = str(e)
+            if attempt < self.ATTEMPTS:
+                wait = self.BACKOFF * attempt
+                print(f"   ! Attempt {attempt}/{self.ATTEMPTS} failed ({last_error}); retrying in {wait:.0f}s")
+                time.sleep(wait)
+        raise RuntimeError(f"Failed to download {url} after {self.ATTEMPTS} attempts: {last_error}")
+
+    def _download_once(self, url: str, target: Path) -> None:
+        # Add User-Agent to avoid bot blocking
+        req = urllib.request.Request(
+            url,
+            headers={'User-Agent': 'GeoServer-Plugin-Manager/1.0'}
+        )
+        partial = target.with_name(target.name + ".part")
         try:
-            print(f"   URL: {url}")
-            
-            # Add User-Agent to avoid bot blocking
-            req = urllib.request.Request(
-                url,
-                headers={'User-Agent': 'GeoServer-Plugin-Manager/1.0'}
-            )
-            
-            with urllib.request.urlopen(req) as response:
-                with open(target, 'wb') as f:
-                    f.write(response.read())
-            
-            print(f"   ✓ Downloaded to {target}")
-        except urllib.error.HTTPError as e:
-            raise RuntimeError(f"HTTP {e.code} error downloading {url}: {e.reason}") from e
-        except urllib.error.URLError as e:
-            raise RuntimeError(f"URL error downloading {url}: {e.reason}") from e
-        except Exception as e:
-            raise RuntimeError(f"Failed to download {url}: {str(e)}") from e
+            with urllib.request.urlopen(req, timeout=self.TIMEOUT) as response:
+                with open(partial, 'wb') as f:
+                    shutil.copyfileobj(response, f)
+            # A mirror's HTML error page is not a plugin.
+            if not zipfile.is_zipfile(partial):
+                raise zipfile.BadZipFile(f"{url} did not return a zip file")
+            partial.replace(target)
+        finally:
+            partial.unlink(missing_ok=True)
 
     def _extract(self, zip_path: Path) -> None:
         with zipfile.ZipFile(zip_path) as zf:
