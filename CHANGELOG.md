@@ -26,6 +26,14 @@ First release under the `<GeoServer version>-tosca.<n>` scheme. The existing
 - The rendered JDBC `config.xml` files are no longer tracked; they are
   generated from their templates by `scripts/activate_jdbcS_settings.sh`.
 
+### Fixed
+- Plugin downloads at build time retry up to 5 times with a timeout and check
+  that the file is a zip, so a slow or failing download mirror no longer fails
+  the build (the first release run timed out on a SourceForge mirror).
+  Settable with `PLUGIN_DOWNLOAD_ATTEMPTS`, `PLUGIN_DOWNLOAD_TIMEOUT`,
+  `PLUGIN_DOWNLOAD_BACKOFF`. Which plugins are downloaded, and from where, is
+  unchanged.
+
 GeoServer 2.28.5 on Tomcat 9.0.106 / Java 17 with the official plugins `gdal`,
 `monitor`, `vectortiles`, `mbstyle` and the community plugins `jdbcconfig`,
 `jdbcstore`, `sec-oauth2-openid-connect` — unchanged.
