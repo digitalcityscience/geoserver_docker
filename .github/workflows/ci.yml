@@ -1,0 +1,72 @@
+name: CI
+
+# Builds the image and checks it on every pull request and on main.
+# Nothing is pushed to GHCR from here: images are published only by
+# release.yml, from a release tag.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Same build arguments as the published images; keep in step with the
+  # defaults in docker/Dockerfile and with release.yml.
+  GEOSERVER_VERSION: 2.28.5
+  IMAGE_VERSION: 9.0.106-jdk17-temurin-jammy
+  DEFAULT_OFFICIAL_PLUGINS: "gdal,monitor,vectortiles,mbstyle"
+  DEFAULT_COMMUNITY_PLUGINS: "jdbcconfig,jdbcstore,sec-oauth2-openid-connect"
+
+jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: gitleaks (commits of this change)
+        run: |
+          range=${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || 'HEAD~1..HEAD' }}
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 \
+            git /repo --redact --no-banner --log-opts="$range"
+
+  image:
+    name: Build and smoke test the image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build (linux/amd64)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: tosca-geoserver:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            GEOSERVER_VERSION=${{ env.GEOSERVER_VERSION }}
+            IMAGE_VERSION=${{ env.IMAGE_VERSION }}
+            DEFAULT_OFFICIAL_PLUGINS=${{ env.DEFAULT_OFFICIAL_PLUGINS }}
+            DEFAULT_COMMUNITY_PLUGINS=${{ env.DEFAULT_COMMUNITY_PLUGINS }}
+            VERSION=ci-${{ github.sha }}
+            REVISION=${{ github.sha }}
+
+      - name: Smoke test
+        env:
+          EXPECT_IMAGE_VERSION: ci-${{ github.sha }}
+        run: scripts/ci/smoke-image.sh tosca-geoserver:ci

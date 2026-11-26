@@ -20,3 +20,10 @@ __pycache__/
 
 # Ignore backup files
 *~
+
+# Rendered by scripts/activate_jdbcS_settings.sh from the *.template next to
+# them; they contain the database password, so they are never committed.
+docker/geoserver-init/auth/jdbc_auth/config.xml
+docker/geoserver-init/jdbc_login_service/jdbc_login/config.xml
+docker/geoserver-init/jdbc_role_service/jdbc_role/config.xml
+docker/geoserver-init/security/config.xml
