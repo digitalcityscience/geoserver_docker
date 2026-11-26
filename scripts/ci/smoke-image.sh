@@ -15,6 +15,7 @@ expected_version=${GEOSERVER_VERSION:-$(sed -n 's/^ARG GEOSERVER_VERSION=//p' "$
 name=tosca-geoserver-smoke-$$
 port=${SMOKE_PORT:-18585}
 
+# shellcheck disable=SC2317 # called by the EXIT trap
 cleanup() {
   if [[ $failed != 0 ]]; then docker logs --tail 80 "$name" 2>&1 || true; fi
   # Started with --rm: stopping it also removes its anonymous data volume.
