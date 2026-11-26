@@ -1,0 +1,152 @@
+name: Release
+
+# Publishes ghcr.io/digitalcityscience/tosca-geoserver from a release tag.
+#
+#   tag v2.28.5-tosca.1  ->  image tosca-geoserver:2.28.5-tosca.1 + GitHub Release
+#
+# The tag names the GeoServer version and TOSCA's own revision of the image.
+# A version is published once: if the image tag already exists in GHCR the run
+# stops, so a published image is never replaced. Plain `2.28.5` and `latest`
+# are not written by this workflow.
+#
+# Order: check the tag -> build every platform once into an OCI archive ->
+# smoke test the amd64 image from that archive -> push exactly that archive ->
+# create the GitHub Release. Nothing is deployed anywhere.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to publish, e.g. v2.28.5-tosca.1 (only if the tag push run failed before publishing)"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/digitalcityscience/tosca-geoserver
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+  IMAGE_VERSION: 9.0.106-jdk17-temurin-jammy
+  DEFAULT_OFFICIAL_PLUGINS: "gdal,monitor,vectortiles,mbstyle"
+  DEFAULT_COMMUNITY_PLUGINS: "jdbcconfig,jdbcstore,sec-oauth2-openid-connect"
+  PLATFORMS: linux/amd64,linux/arm64
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create the GitHub Release
+      packages: write   # push to GHCR
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          fetch-depth: 0
+
+      - name: Check the tag
+        id: tag
+        run: |
+          set -euo pipefail
+          [[ $TAG =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-tosca\.([0-9]+)$ ]] \
+            || { echo "::error::Tag '$TAG' is not of the form v<geoserver-version>-tosca.<n>"; exit 1; }
+          gs=${BASH_REMATCH[1]}
+          dockerfile_gs=$(sed -n 's/^ARG GEOSERVER_VERSION=//p' docker/Dockerfile)
+          [[ $gs == "$dockerfile_gs" ]] \
+            || { echo "::error::Tag names GeoServer $gs but docker/Dockerfile builds $dockerfile_gs"; exit 1; }
+          git fetch -q origin main
+          git merge-base --is-ancestor "$(git rev-parse HEAD)" origin/main \
+            || { echo "::error::$TAG does not point at a commit on main"; exit 1; }
+          version=${TAG#v}
+          grep -q "^## \[$version\]" CHANGELOG.md \
+            || { echo "::error::CHANGELOG.md has no '## [$version]' section"; exit 1; }
+          {
+            echo "version=$version"
+            echo "geoserver=$gs"
+            echo "revision=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Refuse to replace a published image
+        run: |
+          # Fails closed: only "manifest unknown" counts as "not published yet".
+          command -v skopeo >/dev/null || { sudo apt-get update -q && sudo apt-get install -yq skopeo; }
+          ref="docker://$IMAGE:${{ steps.tag.outputs.version }}"
+          if out=$(skopeo inspect --raw --creds "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" "$ref" 2>&1); then
+            echo "::error::$IMAGE:${{ steps.tag.outputs.version }} already exists. Release a new tosca revision instead."
+            exit 1
+          elif ! grep -qi 'manifest unknown' <<<"$out"; then
+            echo "::error::Could not check whether $ref exists: $out"
+            exit 1
+          fi
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build all platforms into an OCI archive
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          platforms: ${{ env.PLATFORMS }}
+          outputs: type=oci,dest=${{ runner.temp }}/image.tar
+          cache-from: type=gha
+          provenance: false
+          build-args: |
+            GEOSERVER_VERSION=${{ steps.tag.outputs.geoserver }}
+            IMAGE_VERSION=${{ env.IMAGE_VERSION }}
+            DEFAULT_OFFICIAL_PLUGINS=${{ env.DEFAULT_OFFICIAL_PLUGINS }}
+            DEFAULT_COMMUNITY_PLUGINS=${{ env.DEFAULT_COMMUNITY_PLUGINS }}
+            VERSION=${{ steps.tag.outputs.version }}
+            REVISION=${{ steps.tag.outputs.revision }}
+
+      - name: Smoke test the amd64 image from the archive
+        env:
+          GEOSERVER_VERSION: ${{ steps.tag.outputs.geoserver }}
+          EXPECT_IMAGE_VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          skopeo copy -q --override-arch amd64 --override-os linux \
+            "oci-archive:${{ runner.temp }}/image.tar" docker-daemon:tosca-geoserver:release-test
+          scripts/ci/smoke-image.sh tosca-geoserver:release-test
+
+      - name: Push the tested archive to GHCR
+        id: push
+        run: |
+          set -euo pipefail
+          skopeo copy -q --all --dest-creds "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" \
+            "oci-archive:${{ runner.temp }}/image.tar" "docker://$IMAGE:${{ steps.tag.outputs.version }}"
+          digest=$(skopeo inspect --raw --creds "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" \
+            "docker://$IMAGE:${{ steps.tag.outputs.version }}" | sha256sum | cut -d' ' -f1)
+          echo "digest=sha256:$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.tag.outputs.version }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          {
+            awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on' CHANGELOG.md
+            echo
+            echo "### Image"
+            echo
+            echo '```'
+            echo "$IMAGE:$VERSION@$DIGEST"
+            echo '```'
+            echo
+            echo "GeoServer ${{ steps.tag.outputs.geoserver }} on Tomcat $IMAGE_VERSION, platforms $PLATFORMS."
+            echo "Built-in plugins: official \`$DEFAULT_OFFICIAL_PLUGINS\`, community \`$DEFAULT_COMMUNITY_PLUGINS\`."
+            echo
+            gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$TAG" --jq .body
+          } > "${{ runner.temp }}/notes.md"
+          gh release create "$TAG" --verify-tag --title "tosca-geoserver $VERSION" \
+            --notes-file "${{ runner.temp }}/notes.md"
+
+      - name: Summary
+        run: |
+          echo "Published \`$IMAGE:${{ steps.tag.outputs.version }}@${{ steps.push.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"

@@ -1,12 +1,19 @@
 # GeoServer Docker Image
 
+[![CI](https://github.com/digitalcityscience/geoserver_docker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/digitalcityscience/geoserver_docker/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/digitalcityscience/geoserver_docker?sort=semver)](https://github.com/digitalcityscience/geoserver_docker/releases)
+[![Image](https://img.shields.io/badge/image-ghcr.io%2Fdigitalcityscience%2Ftosca--geoserver-blue?logo=docker)](https://github.com/digitalcityscience/geoserver_docker/pkgs/container/tosca-geoserver)
+[![License: MIT](https://img.shields.io/github/license/digitalcityscience/geoserver_docker)](LICENSE)
+
+The GeoServer image of the [TOSCA platform](https://github.com/digitalcityscience/TOSCA). To run the whole platform, start there; this repository builds and releases the image.
+
 A self-contained GeoServer Docker image based on Tomcat 9 and Java 17. It downloads the selected GeoServer release and installs the configured official and community extensions at build time.
 
 The image can run on its own. PostgreSQL/PostGIS, JDBC security, and JDBCConfig are optional integrations for deployments that need them.
 
 ## Quick start: run GeoServer only
 
-For normal use, pull a published image from the [GitHub Container Registry package](https://github.com/digitalcityscience/geoserver_docker/pkgs/container/tosca-geoserver). Prefer a specific GeoServer version over `latest`.
+For normal use, pull a released image from the [GitHub Container Registry package](https://github.com/digitalcityscience/geoserver_docker/pkgs/container/tosca-geoserver). Use a release tag such as `2.28.5-tosca.1`, not `latest` (see [Versions and releases](#versions-and-releases)).
 
 ```bash
 docker pull ghcr.io/digitalcityscience/tosca-geoserver:2.28.5
@@ -24,7 +31,7 @@ docker run -d \
 
 Open <http://localhost:8080/geoserver>. On first start, GeoServer uses its standard `admin` / `geoserver` credentials. Change them before exposing the service beyond a trusted local environment.
 
-Versioned images are published by the GitHub Actions workflow after changes are merged to `main`. Use the package page to find available tags.
+Images are published only from release tags, never from a push to `main`. See [Versions and releases](#versions-and-releases).
 
 ## Build an image locally
 
@@ -112,3 +119,22 @@ If you regularly use a custom plugin set, update the GitHub Actions workflow and
 ## Version compatibility
 
 GeoServer 2.28.x requires Java 17 or later. The Dockerfile therefore uses a Java 17 Tomcat 9 image. GeoServer 2.x remains compatible with Tomcat 9.
+
+## Versions and releases
+
+A release is a Git tag `v<GeoServer version>-tosca.<n>`, for example `v2.28.5-tosca.1`: GeoServer 2.28.5, first TOSCA build of it. The next change to the image on the same GeoServer version is `-tosca.2`; a GeoServer upgrade starts again at `-tosca.1`.
+
+| Workflow | Runs on | Does |
+|---|---|---|
+| [`ci.yml`](.github/workflows/ci.yml) | pull requests, pushes to `main` | secret scan, image build, [smoke test](scripts/ci/smoke-image.sh) — pushes nothing |
+| [`release.yml`](.github/workflows/release.yml) | a `v*` tag | checks the tag, builds amd64 and arm64 once, smoke tests that build, pushes it as `tosca-geoserver:<version>`, creates the GitHub Release |
+
+To release:
+
+1. On `main`, add a `## [2.28.5-tosca.N]` section to [CHANGELOG.md](CHANGELOG.md) (through a pull request).
+2. Tag that commit and push the tag: `git tag -a v2.28.5-tosca.N -m "tosca-geoserver 2.28.5-tosca.N" && git push origin v2.28.5-tosca.N`.
+
+A published version is never overwritten: the release workflow stops if the image tag already exists. The older tags `2.27.2`, `2.28.5` and `latest` were written by the previous workflow on every push to `main`; they stay as they are and are no longer updated.
+
+Community plugins (`jdbcconfig`, `jdbcstore`, `sec-oauth2-openid-connect`) are downloaded as GeoServer nightly snapshots at build time, so two builds of the same commit can contain different plugin builds. The released image fixes them; rebuilding later may not.
+
