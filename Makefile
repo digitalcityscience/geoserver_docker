@@ -1,30 +1,41 @@
-.PHONY: which-env build up down restart logs rebuild rmVolumes password
+.PHONY: help which-env build up down restart logs rebuild rmVolumes password image release
 
 # -------------------------------------------------
 # ENV selection (DEFAULT = dev) or prod
 # -------------------------------------------------
+# ENV=dev  uses .env.development and docker-compose-dev.yml
+# ENV=prod uses .env.production  and docker-compose-prod.yml
+# Create the file from its committed template, e.g.
+#   cp .env.development.example .env.development
 ENV ?= dev
 
-ENV_FILE := .env.$(ENV)
+ifneq ($(filter $(ENV),dev prod),$(ENV))
+  $(error ❌ Invalid ENV=$(ENV). Allowed values: dev, prod)
+endif
+
+ENV_NAME := $(if $(filter prod,$(ENV)),production,development)
+ENV_FILE := .env.$(ENV_NAME)
 COMPOSE_FILE := docker-compose-$(ENV).yml
 
-# Safety: allow only dev / prod
-ifeq ($(ENV),dev)
-  COMPOSE_FILE := docker-compose-dev.yml
+# `make image`, `make release` and `make help` need no environment file.
+NO_ENV_GOALS := image release help
+ifeq ($(MAKECMDGOALS),)
+  NEEDS_ENV := yes
+else ifneq ($(filter-out $(NO_ENV_GOALS),$(MAKECMDGOALS)),)
+  NEEDS_ENV := yes
 endif
 
-ifeq ($(ENV),prod)
-  COMPOSE_FILE := docker-compose-prod.yml
-endif
-
+ifdef NEEDS_ENV
 # -------------------------------------------------
 # Load env file
 # -------------------------------------------------
 ifneq ("$(wildcard $(ENV_FILE))","")
   include $(ENV_FILE)
   export $(shell sed -n 's/^\s*\([A-Za-z_][A-Za-z0-9_]*\)\s*=.*/\1/p' $(ENV_FILE))
+else ifneq ("$(wildcard .env.$(ENV))","")
+  $(error ❌ Missing $(ENV_FILE). Environment files are now named with the full mode: mv .env.$(ENV) $(ENV_FILE))
 else
-  $(error ❌ Missing $(ENV_FILE))
+  $(error ❌ Missing $(ENV_FILE). Create it: cp $(ENV_FILE).example $(ENV_FILE))
 endif
 
 # -------------------------------------------------
@@ -33,6 +44,7 @@ endif
 ifneq ("$(wildcard $(COMPOSE_FILE))","")
 else
   $(error ❌ Missing $(COMPOSE_FILE))
+endif
 endif
 
 # -------------------------------------------------
@@ -121,3 +133,24 @@ rmVolumes: which-env
 		--env-file $(ENV_FILE) \
 		-f $(COMPOSE_FILE) \
 		down -v
+
+# -------------------------------------------------
+# Image and release (no environment file needed)
+# -------------------------------------------------
+IMAGE ?= tosca-geoserver:dev
+
+help:
+	@echo "make up|down|restart|logs|build|rebuild|rmVolumes ENV=dev|prod   local Compose stack"
+	@echo "make image [IMAGE=name:tag]            build the image as CI does (default tosca-geoserver:dev)"
+	@echo "make release VERSION=2.28.5-tosca.N    tag main and push the tag; CI publishes the image"
+
+# The build arguments are the Dockerfile's defaults, which CI uses as well.
+image:
+	DOCKER_BUILDKIT=1 docker build -f docker/Dockerfile \
+	  --build-arg VERSION=local-$$(git rev-parse --short HEAD) \
+	  --build-arg REVISION=$$(git rev-parse HEAD)$$([ -z "$$(git status --porcelain)" ] || echo -dirty) \
+	  -t $(IMAGE) .
+	@echo "Built $(IMAGE). Check it with: scripts/ci/smoke-image.sh $(IMAGE)"
+
+release:
+	@scripts/release.sh "$(VERSION)"

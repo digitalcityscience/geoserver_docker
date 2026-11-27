@@ -1,5 +1,7 @@
-# Ignore environment files
-.env*
+# Environment files: only the *.example templates are committed.
+.env
+.env.*
+!.env.*.example
 
 # Ignore local data and plugins (created by Makefile)
 geoserver_data/

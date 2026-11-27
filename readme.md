@@ -49,7 +49,7 @@ docker build \
 Use this option when you want a local PostGIS database for spatial stores, or plan to enable the optional JDBC services.
 
 ```bash
-cp env_dev_sample .env.dev
+cp .env.development.example .env.development
 make up ENV=dev
 ```
 
@@ -59,9 +59,11 @@ The stack starts GeoServer at <http://localhost:8080/geoserver> and PostGIS on t
 - `PG_SCHEMA_JDBCCONF` for JDBCConfig
 - `PG_SCHEMA_GIS` for spatial data GeoServer may read
 
-`env_dev_sample` is a template. Copy it to `.env.dev` and set passwords and ports appropriate for your machine. `.env.dev` is ignored by Git.
+`.env.development.example` is a template. Copy it to `.env.development` and set passwords and ports appropriate for your machine. `.env.development` is ignored by Git.
 
-For a server deployment, copy `env_prod_sample` to `.env.prod`, replace every example secret, set an appropriately restrictive CORS allow-list, and run:
+Environment files follow one rule in every TOSCA repository: the committed template is `.env.<mode>.example`, your copy is `.env.<mode>`, and the mode is written out in full (`development`, `production`). There is no plain `.env`, `.env.dev`, `.env.prod` or `.env.example`. `make … ENV=dev` reads `.env.development`; `ENV=prod` reads `.env.production`.
+
+For a server deployment, copy `.env.production.example` to `.env.production`, replace every example secret, set an appropriately restrictive CORS allow-list, and run:
 
 ```bash
 make up ENV=prod
@@ -115,6 +117,8 @@ If you regularly use a custom plugin set, update the GitHub Actions workflow and
 | `make logs geoserver ENV=dev` | Follow GeoServer logs |
 | `make rebuild ENV=dev` | Rebuild the image and restart the stack |
 | `make rmVolumes ENV=dev` | Remove containers and volumes (data loss) |
+| `make image` | Build the image as CI does, without Compose or an environment file |
+| `make release VERSION=2.28.5-tosca.N` | Tag `main` and push the tag; CI publishes the image |
 
 ## Version compatibility
 
@@ -132,7 +136,9 @@ A release is a Git tag `v<GeoServer version>-tosca.<n>`, for example `v2.28.5-to
 To release:
 
 1. On `main`, add a `## [2.28.5-tosca.N]` section to [CHANGELOG.md](CHANGELOG.md) (through a pull request).
-2. Tag that commit and push the tag: `git tag -a v2.28.5-tosca.N -m "tosca-geoserver 2.28.5-tosca.N" && git push origin v2.28.5-tosca.N`.
+2. On the merged `main`, run `make release VERSION=2.28.5-tosca.N`. It checks that the checkout is clean and exactly `origin/main` and that the Dockerfile's GeoServer version and the changelog match, then creates the tag `v2.28.5-tosca.N` and pushes it.
+
+`make image` builds the image on your machine with the same Dockerfile and build arguments as CI (`IMAGE=name:tag` to choose the tag).
 
 A published version is never overwritten: the release workflow stops if the image tag already exists. The older tags `2.27.2`, `2.28.5` and `latest` were written by the previous workflow on every push to `main`; they stay as they are and are no longer updated.
 
