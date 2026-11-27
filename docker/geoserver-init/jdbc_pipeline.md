@@ -1,7 +1,7 @@
 GeoServer JDBC Security Bootstrap — Short Steps
 
 1. Load env
-   Load .env.dev on the host to get DB/JDBC variables.
+   Load .env.development on the host to get DB/JDBC variables.
 2. Detect containers
    Auto-detect geoserver and db containers via docker compose.
 3. Render configs (host)

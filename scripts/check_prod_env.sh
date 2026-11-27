@@ -5,7 +5,7 @@ echo "🔎 Checking PRODUCTION environment safety..."
 
 # 1) PROD_MODE verification
 if [ "$PROD_MODE" != "true" ]; then
-  echo "❌ .env.prod is active BUT PROD_MODE=true is NOT set"
+  echo "❌ .env.production is active BUT PROD_MODE=true is NOT set"
   echo "👉 Explicitly set PROD_MODE=true to confirm production intent"
   exit 1
 fi

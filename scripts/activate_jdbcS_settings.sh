@@ -2,15 +2,15 @@
 #
 # IMPORTANT:
 # This script MUST be executed from the project root directory.
-# It expects .env.dev or .env.prod to be present at the same level.
+# It expects .env.development or .env.production to be present at the same level.
 #
 # Example:
-#   ENV_FILE=.env.dev ./scripts/activate_jdbcS_settings.sh
+#   ENV_FILE=.env.development ./scripts/activate_jdbcS_settings.sh
 #
 # Running this script without the correct env file will cause failures.
 #set -euo pipefail
 
-ENV_FILE="${ENV_FILE:-.env.dev}"
+ENV_FILE="${ENV_FILE:-.env.development}"
 
 ############################################
 # 0️⃣ Load .env (HOST)

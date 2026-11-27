@@ -5,6 +5,18 @@ All notable changes to the `tosca-geoserver` image. Versions are
 
 ## [Unreleased]
 
+### Added
+- `make release VERSION=<GeoServer version>-tosca.<n>` tags `main` and pushes
+  the tag after checking it is releasable; `make image` builds the image
+  locally as CI does. Neither needs an environment file.
+
+### Changed
+- Environment files are named `.env.<mode>` with the mode written out, as in
+  every TOSCA repository: the templates are `.env.development.example` and
+  `.env.production.example` (were `env_dev_sample`, `env_prod_sample`), the
+  local copies `.env.development` and `.env.production` (were `.env.dev`,
+  `.env.prod`). Rename existing local files. `make … ENV=dev|prod` is unchanged.
+
 ## [2.28.5-tosca.1] - 2026-11-26
 
 First release under the `<GeoServer version>-tosca.<n>` scheme. The existing
